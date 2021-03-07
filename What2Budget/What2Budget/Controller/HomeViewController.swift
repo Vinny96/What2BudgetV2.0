@@ -109,14 +109,31 @@ class HomeViewController : UIViewController
     }
     
     
-    private func updateRecordFromDataBase(expenseName : String)
+    private func updateCKRecord(expenseName : String, amountSpent : Float?)
     {
         // we have to make sure that the  expense name recrod dict is not empty before we proceed
         // so we know that if the expenseNameRecordDict is not empty then our cloudDataBase has data inside.
+        // this can also account for the situation in which the user just created an entry and then wants to edit it
         if(expenseNameRecordDict.isEmpty == false)
         {
             let recordToModify = expenseNameRecordDict[expenseName]!
-            
+            let recordID = recordToModify.recordID
+            privateUserCloudDataBase.fetch(withRecordID: recordID) { (recordFetched, error) in
+                if(recordFetched != nil && error == nil)
+                {
+                    if let safeAmountSpent = amountSpent
+                    {
+                        recordFetched?.setValue(safeAmountSpent, forKey: expenseName)
+                        self.privateUserCloudDataBase.save(recordFetched!) { (record, error) in
+                            if(record != nil && error == nil)
+                            {
+                                print("Record has been successfully updated in the users private cloud database.")
+                            }
+                        }
+                    }
+                    
+                }
+            }
             
         }
         
@@ -308,17 +325,21 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
-    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float, arrayOfExpenseModelObject: [ExpenseModel], newNote : String) {
+    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float?, arrayOfExpenseModelObject: [ExpenseModel], newNote : String?) {
         let expenseObjectToEdit = arrayOExpenseModelObjects[indexPath.row]
-        let originalAmountSpent = expenseObjectToEdit.amountSpent
-        let newValue = abs(originalAmountSpent - newAmount)
-        amountSpentDict.updateValue(newValue, forKey: expenseName)
         
         // now we are creating the new expense model object to add
         let newExpenseModelObject = ExpenseModel(context: context)
         newExpenseModelObject.companyName = expenseObjectToEdit.companyName
         newExpenseModelObject.notes = newNote
-        newExpenseModelObject.amountSpent = newAmount
+        if let safeNewAmount = newAmount
+        {
+            newExpenseModelObject.amountSpent = safeNewAmount
+        }
+        else
+        {
+            newExpenseModelObject.amountSpent = amountSpentDict[expenseName]!
+        }
         newExpenseModelObject.receipt = expenseObjectToEdit.receipt
         
         // we now have to remove the old one from both the array and the context
@@ -326,11 +347,22 @@ extension HomeViewController : didPersistedDataChange
         context.delete(expenseObjectToEdit)
         arrayOExpenseModelObjects.append(newExpenseModelObject)
         saveContext()
+        
+        // now we need to update the record in the database and we have to udate the value in the amountSpentDict
+        let originalValue = amountSpentDict[expenseName]
+        if let safeOriginalValue = originalValue
+        {
+            if let safeNewAmount = newAmount
+            {
+                let differenceValueForExpenseKey = safeNewAmount - safeOriginalValue
+                let newValueForKey = safeOriginalValue + differenceValueForExpenseKey
+                amountSpentDict.updateValue(newValueForKey, forKey: expenseName)
+                // here we are updating the record in the database
+                updateCKRecord(expenseName: expenseName, amountSpent: newValueForKey)
+            }
+        }
     }
     
-   
-    
-
     func addedToPersistedStore() {
         loadContext()
         resetAllDictionaries()
@@ -338,6 +370,8 @@ extension HomeViewController : didPersistedDataChange
         initializeNumberOfEntriesSpentDict()
         tableView.reloadData()
         print("Running from inside the persistedDataChange method in HomeViewController")
+        // this method needs to change as we can edit the dictionary in constant time. If we can cut down on some O(N)'s it is better
+        // right off the bat the numberOfEntriesSpentDict can be updated to run in constant time along with the amountSpentDict. There is no need to reset and add everything in every single time we create a new expense. 
     }
     
     
@@ -350,7 +384,7 @@ extension HomeViewController : didPersistedDataChange
  
  the varible currentRecord refers to records whose endingTimePeriod is the exact same as the endingDate as our DataBase will also contain older recrods that we want to have so the user can compare any of the older records with the newer ones.
  
- We do not need a read operation for our cloud kit database here as we do not to read the data at any point. 
+ We do not need a read operation for our cloud kit database here as we do not to read the data at any point.
  
  
  

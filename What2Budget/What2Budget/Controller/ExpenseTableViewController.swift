@@ -229,7 +229,7 @@ protocol didPersistedDataChange {
     func addedToPersistedStore()
     // so what we want to do with this protocol is that whenver the persisted data has changed we want to call the function. However in order for the communication between the two viewControllers to properly work we need to implement in the HomeViewController. In the prepareForSegue method we then want to then set the delegate to the HomeViewController so when we call the method here the implementation in the HomeViewControler will be the one that is executed.
     
-    func dataEditedInPersistedStore(expenseName : String, indexPath : IndexPath, newAmount : Float, arrayOfExpenseModelObject : [ExpenseModel], newNote : String)
+    func dataEditedInPersistedStore(expenseName : String, indexPath : IndexPath, newAmount : Float?, arrayOfExpenseModelObject : [ExpenseModel], newNote : String?)
     // so this method is for when a data entry has been changed in the persisted store so we only need to update the amountSpentDict as there is no need to udpate the other dictionatires and take up even more time. So what we want called here is when a data entry has been updated we want to not only update the amountSpent dictionaries but also sync it with the cloud as well.
     // will only be called when data in the persistent store is edited.
     // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N). 
