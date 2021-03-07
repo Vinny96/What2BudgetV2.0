@@ -109,42 +109,7 @@ class HomeViewController : UIViewController
         }
     }
     
-    private func updateRecord()
-    {
-        // so one thing we know is that when we update the record the expenseNameRecordDict should already be filled with the necessary records we need. We can use this to get the record ID we want and we can get the expense type from the record and we can update this record with the amount spent value from the amount spend dictionary.
-        // so this method will be updating all of the records
-        // we want to iterate through all of the pairs in expenseNameRecordDict and from there we want to proceed to modify each record with new amountSpentValue
-        // so to save time we only want to update the record on the server if the value is different than what is on the server
-        // O(N) runtime as because we are using the record ID to fetch it this should be in fact a constant time operation so the run time for this function is O(N)
-        for pair in expenseNameRecordDict
-        {
-            let recordToUse = pair.value
-            let recordID = recordToUse.recordID
-            let expenseType = recordToUse.value(forKey: "expenseType")
-            let valueFromServer = recordToUse.value(forKey: "amountSpent")
-            if let safeExpenseType = expenseType, let safeValueFromServer = valueFromServer
-            {
-                let expenseType = safeExpenseType as! String
-                let expenseValueFromServer = safeValueFromServer as! Float
-                let expenseValue = amountSpentDict[expenseType]!
-                if(expenseValue != expenseValueFromServer)
-                {
-                    let recordFetched = privateUserCloudDataBase.fetch(withRecordID: recordID) { (recordFetched, error) in
-                        if let safeRecord = recordFetched
-                        {
-                            safeRecord.setValue(expenseValue, forKey: "amountSpent")
-                            self.privateUserCloudDataBase.save(safeRecord) { (record, error) in
-                                if(record != nil && error == nil)
-                                {
-                                    print("Record has been successfully updated and saved onto the cloud database.")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+  
     
     
     private func readRecordFromDataBase(expenseName : String) // 0(N) runtime N being the if our entry in the database is the very last one.
@@ -345,7 +310,11 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
-    func persistedDataChanged() {
+    func dataEditedInPersisstedStore() {
+        
+    }
+    
+    func addedToPersistedStore() {
         loadContext()
         resetAllDictionaries()
         initializeAmountSpentDic()
