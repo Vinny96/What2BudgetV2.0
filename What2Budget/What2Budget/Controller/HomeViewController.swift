@@ -88,7 +88,6 @@ class HomeViewController : UIViewController
                         {
                             print(safeRecord)
                             self.expenseNameRecordDict.updateValue(safeRecord, forKey: expenseName)
-                            // appends to the dictionary successfully
                         }
                     }
                     else
@@ -109,35 +108,22 @@ class HomeViewController : UIViewController
         }
     }
     
-  
     
-    
-    private func readRecordFromDataBase(expenseName : String) // 0(N) runtime N being the if our entry in the database is the very last one.
+    private func updateRecordFromDataBase(expenseName : String)
     {
-        let endPeriodAsString = String(defaults.string(forKey: "Set End Date") ?? "00/00/00")
-        let predicateOne = NSPredicate(format: "expenseType == %@", expenseName)
-        let predicateTwo = NSPredicate(format: "endingTimePeriod == %@", endPeriodAsString)
-        let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicateOne,predicateTwo])
-        let query = CKQuery(recordType: "Expense", predicate: compoundPredicate)
-        let operation = CKQueryOperation(query: query)
-        operation.recordFetchedBlock = { record in
-            self.expenseNameRecordDict.updateValue(record, forKey: expenseName)
-            print(record)
-        }
-        privateUserCloudDataBase.add(operation)
-        
-        // what this method does is that it gets all the records from our database that matches our CkQuery and we then add that record in our arrayOfRecrods. So this operation can actually return more than one record however because we are adding a predicate in which we are filtering it by endingTimePeriod sand because of the way our database is structured only one record is ever going to be returned that matches the expenseType and endingTimePeriod. So when we do the update operation we have to make sure that we update this record and not create a new one.
-    }
-    
-    private func readAllCurrentRecordsFromDataBase() // O(N*M) runtime because the database is only ever going to contain 1 record of each expense type that matches both predicates from above but it needs to search a database of size M to get it. However when database is empty just O(N)
-    {
-        for expenseName in arrayOfExpenseNames
+        // we have to make sure that the  expense name recrod dict is not empty before we proceed
+        // so we know that if the expenseNameRecordDict is not empty then our cloudDataBase has data inside.
+        if(expenseNameRecordDict.isEmpty == false)
         {
-            readRecordFromDataBase(expenseName: expenseName)
+            let recordToModify = expenseNameRecordDict[expenseName]!
+            
+            
         }
-        print("Dictionary name is being printed below.")
-        print(expenseNameRecordDict)
+        
     }
+   
+    
+  
     
     private func saveAndUpdateToCloudHandler() // this is the function that we want to be either saving to the cloud or updating to the cloud
     {
@@ -164,7 +150,6 @@ class HomeViewController : UIViewController
         resetAllDictionaries()
         initializeAmountSpentDic()
         initializeNumberOfEntriesSpentDict()
-        readAllCurrentRecordsFromDataBase()
         print("View Controller is being initialized.")
     }
     
@@ -174,7 +159,7 @@ class HomeViewController : UIViewController
         startDate.text = defaults.string(forKey: "Set Start Date")
         endDate.text = defaults.string(forKey: "Set End Date")
     }
-    
+        
     private func initializeAmountSpentDic() // O(N) Time and O(1) Space
     {
         for expenseModelObject in arrayOExpenseModelObjects
@@ -271,6 +256,19 @@ class HomeViewController : UIViewController
         }
     }
     
+    private func saveContext()
+    {
+        do
+        {
+            try context.save()
+        }
+        catch
+        {
+            print("There was an error in saving to the context.")
+            print(error.localizedDescription)
+        }
+    }
+    
     
 }
 
@@ -310,10 +308,29 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
-    func dataEditedInPersisstedStore() {
+    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float, arrayOfExpenseModelObject: [ExpenseModel], newNote : String) {
+        let expenseObjectToEdit = arrayOExpenseModelObjects[indexPath.row]
+        let originalAmountSpent = expenseObjectToEdit.amountSpent
+        let newValue = abs(originalAmountSpent - newAmount)
+        amountSpentDict.updateValue(newValue, forKey: expenseName)
         
+        // now we are creating the new expense model object to add
+        let newExpenseModelObject = ExpenseModel(context: context)
+        newExpenseModelObject.companyName = expenseObjectToEdit.companyName
+        newExpenseModelObject.notes = newNote
+        newExpenseModelObject.amountSpent = newAmount
+        newExpenseModelObject.receipt = expenseObjectToEdit.receipt
+        
+        // we now have to remove the old one from both the array and the context
+        arrayOExpenseModelObjects.remove(at: indexPath.row)
+        context.delete(expenseObjectToEdit)
+        arrayOExpenseModelObjects.append(newExpenseModelObject)
+        saveContext()
     }
     
+   
+    
+
     func addedToPersistedStore() {
         loadContext()
         resetAllDictionaries()
@@ -332,6 +349,8 @@ extension HomeViewController : didPersistedDataChange
  
  
  the varible currentRecord refers to records whose endingTimePeriod is the exact same as the endingDate as our DataBase will also contain older recrods that we want to have so the user can compare any of the older records with the newer ones.
+ 
+ We do not need a read operation for our cloud kit database here as we do not to read the data at any point. 
  
  
  
