@@ -325,7 +325,41 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
-    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float?, arrayOfExpenseModelObject: [ExpenseModel], newNote : String?) {
+    func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd: Float, expenseName: String) {
+        let originalAmount = amountSpentDict[expenseName]
+        if let safeOriginalAmount = originalAmount
+        {
+            let newAmount = safeOriginalAmount + amountToAdd
+            amountSpentDict.updateValue(newAmount, forKey: expenseName)
+            print(amountSpentDict)
+        }
+    }
+    
+    func addToNumberOfEntriesDict(expenseKey : String)
+    {
+        let originalValue = numberOfEntriesDict[expenseKey]
+        if let safeOriginalValue = originalValue
+        {
+            let newValue = safeOriginalValue + 1
+            numberOfEntriesDict.updateValue(newValue, forKey: expenseKey)
+            print(numberOfEntriesDict)
+        }
+    }
+    
+    func dataDeletedInPersistedStore(expenseName: String, objectToDelete amountSpent: Float) {
+        let originalAmountSpent = amountSpentDict[expenseName]
+        let originalNumberOfEntires = numberOfEntriesDict[expenseName]
+        if let safeOriginalAmountSpent = originalAmountSpent, let safeOriginalNumberOfEntries = originalNumberOfEntires
+        {
+            let newAmountSpent = safeOriginalAmountSpent - amountSpent
+            let newNumberOfEntries = safeOriginalNumberOfEntries - 1
+            amountSpentDict.updateValue(newAmountSpent, forKey: expenseName)
+            numberOfEntriesDict.updateValue(newNumberOfEntries, forKey: expenseName)
+        }
+    }
+    
+    
+    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float?, newNote : String?) {
         let expenseObjectToEdit = arrayOExpenseModelObjects[indexPath.row]
         
         // now we are creating the new expense model object to add
@@ -362,32 +396,16 @@ extension HomeViewController : didPersistedDataChange
             }
         }
     }
-    
-    func addedToPersistedStore() {
-        loadContext()
-        resetAllDictionaries()
-        initializeAmountSpentDic()
-        initializeNumberOfEntriesSpentDict()
-        tableView.reloadData()
-        print("Running from inside the persistedDataChange method in HomeViewController")
-        // this method needs to change as we can edit the dictionary in constant time. If we can cut down on some O(N)'s it is better
-        // right off the bat the numberOfEntriesSpentDict can be updated to run in constant time along with the amountSpentDict. There is no need to reset and add everything in every single time we create a new expense. 
-    }
-    
-    
 }
 
 //MARK: - Explanation
 /*
- So with the three dictionary methods in the viewWillAppear method this is the explanation behind them. Anytime we add a new expense object in the expenseTableView we want these changes to be reflected in our HomeViewController. HomeViewController is only loaded in once so we cannot pass these methods into viewDidLoad as it will only get called the first time and will not get called again. So in order for the changes to be relfected in this view controller the methods have to be called in the viewWillAppear method. Now one issue that arose is when we switched back and forth from the two viewControllers the values for both dictionaries kept doubling and did not reflect the true value of the total expenseModelObjects nor the number of expenseModelObjects for the entries. So what we did to fix this is we did a reset method. So anytime we come back from expenseTableViewController we would reset both dictionaries to have a value of zero for all keys. Then we call the initialize dictionaries methods to get the appropriate values for the keys and this way we can avoid the doubling. It would be ideal if there was a way to check if the data was changed in the expenseTableViewController and we can maybe some kind of variable down from that view controller to the homeViewController. If this variable indicates that changes have happened then we can do the reset and initialize method.We also have to call load context in the viewWillAppear everytime as we have to take into account the new expenseModel object we have added in the expenseTableView controller. Run time is linear and it would help if this is opitimized. Run time is O(3N) which is O(N).
- 
- 
  the varible currentRecord refers to records whose endingTimePeriod is the exact same as the endingDate as our DataBase will also contain older recrods that we want to have so the user can compare any of the older records with the newer ones.
  
  We do not need a read operation for our cloud kit database here as we do not to read the data at any point.
  
  
- 
+ So what we did here with the didPersistedDataChange is we established a communication pattern between the HomeViewController and the ExpenseTableViewController. So for now what has been implemented and tested to work is the create method and the methods for the protocl all run in constant time. The implementation that was done here is being called in the ExpenseTableViewController so the dictionaries themselves are getting updated and this is thanks to the delegate-protocol communicaiton pattern that was estalibshed between the HomeViewController and ExpenseTableViewController. 
  
  
  
