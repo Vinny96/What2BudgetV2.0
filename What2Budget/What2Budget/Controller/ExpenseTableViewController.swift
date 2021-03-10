@@ -153,88 +153,101 @@ class ExpenseTableViewController : UIViewController
     }
     
     private func editExpenseEntry(indexPath : IndexPath)
-    {
-        let alertControllerOne = UIAlertController(title: "Edit Expense Entry", message: "Please do not use this to delete the expense, use the options only for editing.", preferredStyle: .alert)
-        let alertActionOne = UIAlertAction(title: "Edit Amount Spent", style: .destructive) { (alertActionOneHandler) in
-            // here is where we are editing ONLY the edit amount spent
-            var internalTextField = UITextField()
-            let internalAlertController = UIAlertController(title: "Edit Amount Spent", message: "Please enter your new amount below", preferredStyle: .alert)
-            internalAlertController.addTextField { (textFieldToAdd) in
-                internalTextField = textFieldToAdd
-                internalTextField.placeholder = "Please enter new amount here"
-                internalTextField.keyboardType = .decimalPad
-            }
-            
-            let internalActionOne = UIAlertAction(title: "Save New Amount", style: .default) { (internalActionOneHandler) in
-                if(internalTextField.hasText == true)
-                {
-                    let newAmountSpent = (internalTextField.text! as NSString).floatValue
-                    let newNote : String? = nil
-                    self.didPersistedChangeDelegate?.dataEditedInPersistedStore(expenseName: self.typeOfExpense, indexPath: indexPath, newAmount: newAmountSpent, newNote: newNote)
-                }
-                else
-                {
-                    let alertControllerForInvalid = UIAlertController(title: "Invalid Entry", message: "Please try again", preferredStyle: .alert)
-                    let alertAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
-                    alertControllerForInvalid.addAction(alertAction)
-                    DispatchQueue.main.async {
-                        self.present(alertControllerForInvalid, animated: true, completion: nil)
-                    }
-                }
-            }
-            
-            let internalActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-            internalAlertController.addAction(internalActionOne)
-            internalAlertController.addAction(internalActionTwo)
+    {        
+        let mainAlertController = UIAlertController(title: "Edit Expense", message: "Please choose one of the options below", preferredStyle: .alert)
+        let mainAlertActionEditAmount = UIAlertAction(title: "Edit Amount Spent", style: .destructive) { (editAmountHandler) in
             DispatchQueue.main.async {
+                self.editAmountSpent(indexPath: indexPath)
+            }
+        }
+        
+        let mainAlertActionEditNote = UIAlertAction(title: "Edit Note", style: .destructive) { (editNoteHandler) in
+            DispatchQueue.main.async {
+                self.editNote(indexPath: indexPath)
+            }
+        }
+        
+        let mainAlertActionEditBoth = UIAlertAction(title: "Edit Both", style: .destructive) { (editBothHandler) in
+            DispatchQueue.main.async {
+                self.editAmountSpent(indexPath: indexPath)
+                self.editNote(indexPath: indexPath)
+            }
+        }
+        mainAlertController.addAction(mainAlertActionEditAmount)
+        mainAlertController.addAction(mainAlertActionEditNote)
+        mainAlertController.addAction(mainAlertActionEditBoth)
+        self.present(mainAlertController, animated: true, completion: nil)
+        
+        /*
+            So what we did here is we split the three buttons into their own functionalities rather than having them all in one functionality. So for editiing the amountSpent we have
+            a funcion that deals only with that and for editing the note we have a function that deals only with that. When it comes to editing both we just called both methods. Only issue with efficiency here is that when we execute both methods we are also attempting to remove it from the context twice this could lead to an addtional O(N) search and this can be optimized. 
+         
+         */
+    }
+    
+    // editExpenseEntry Function Helpers
+    private func editAmountSpent(indexPath : IndexPath)
+    {
+        var textField = UITextField()
+        let alertController = UIAlertController(title: "Edit Amount Spent", message: "Please enter the new amount below", preferredStyle: .alert)
+        alertController.addTextField { (textFieldToAdd) in
+            textField = textFieldToAdd
+            textField.placeholder = "Please enter new amount here"
+            textField.keyboardType = .decimalPad
+        }
+        let alertControllerActionOne = UIAlertAction(title: "Save", style: .destructive) { (actionOneHandler) in
+            if(textField.hasText == true)
+            {
+                let newAmountAsFloat = (textField.text! as NSString).floatValue
+                let noteToPass : String? = nil
+                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass)
+            }
+            else
+            {
+                let internalAlertController = UIAlertController(title: "Invalid Entry", message: "Entry is invalid please try again", preferredStyle: .alert)
+                let internalAlertAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
+                internalAlertController.addAction(internalAlertAction)
+                DispatchQueue.main.async {
+                    self.present(internalAlertController, animated: true, completion: nil)
+                }
+            }
+        }
+        let alertControllerActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        alertController.addAction(alertControllerActionOne)
+        alertController.addAction(alertControllerActionTwo)
+        present(alertController, animated: true, completion: nil)
+    }
+    
+    private func editNote(indexPath : IndexPath)
+    {
+        var textField = UITextField()
+        let alertControllerOne = UIAlertController(title: "Edit Note", message: "Please enter the new note below", preferredStyle: .alert)
+        alertControllerOne.addTextField { (textFieldToAdd) in
+            textField = textFieldToAdd
+            textField.placeholder = "Please enter your new note here"
+            textField.keyboardType = .emailAddress
+        }
+        let alertControllerOneSaveAction = UIAlertAction(title: "Save", style: .destructive) { (saveActionHandler) in
+            if(textField.hasText == true)
+            {
+                let newNote = textField.text!
+                let newAmount : Float? = nil
+                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmount, newNote: newNote)
+            }
+            else
+            {
+                let internalAlertController = UIAlertController(title: "Invalid Entry", message: "Entry is invalid please try again", preferredStyle: .alert)
+                let interalAlertContAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
+                internalAlertController.addAction(interalAlertContAction)
                 self.present(internalAlertController, animated: true, completion: nil)
             }
         }
-        //Alert Action Two Code
-        
-        let alertActionTwo = UIAlertAction(title: "Edit Notes", style: .destructive) { (alertActionTwoHandler) in
-            // here is where we are editing ONLY the notes
-            var internalTextField = UITextField()
-            let internalAlertController = UIAlertController(title: "Edit Notes", message: "Type your new note below", preferredStyle: .alert)
-            internalAlertController.addTextField { (textField) in
-                internalTextField = textField
-                internalTextField.placeholder = "Type note here"
-                internalTextField.keyboardType = .emailAddress
-            }
-            let internalAlertAction = UIAlertAction(title: "Save", style: .default) { (saveAlertActionHandler) in
-                if(internalTextField.hasText == true)
-                {
-                    let newNoteToPass = internalTextField.text!
-                    self.didPersistedChangeDelegate?.dataEditedInPersistedStore(expenseName: self.typeOfExpense, indexPath: indexPath, newAmount: 0, newNote: newNoteToPass)
-                }
-                else
-                {
-                    let alertControllerForInvalidEntry = UIAlertController(title: "Invalid Entry", message: "Entry was invalid please try again", preferredStyle: .alert)
-                    let alertActionForInvalidEntry = UIAlertAction(title: "Ok", style: .default, handler: nil)
-                    alertControllerForInvalidEntry.addAction(alertActionForInvalidEntry)
-                    DispatchQueue.main.async {
-                        self.present(alertControllerForInvalidEntry, animated: true, completion: nil)
-                    }
-                }
-            }
-            let internalAlertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-            internalAlertController.addAction(internalAlertAction)
-            internalAlertController.addAction(internalAlertActionTwo)
-        }
-        
-        
-        let alertActionThree = UIAlertAction(title: "Edit Both", style: .destructive) { (alertActionHandler) in
-            // here we are editing the AmountSpent and editing the Notes
-            
-        }
-        
-        let alertActionFour = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-        
-        alertControllerOne.addAction(alertActionOne)
-        alertControllerOne.addAction(alertActionTwo)
-        alertControllerOne.addAction(alertActionThree)
-        alertControllerOne.addAction(alertActionFour)
+        let alertControllerOneCancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        alertControllerOne.addAction(alertControllerOneSaveAction)
+        alertControllerOne.addAction(alertControllerOneCancelAction)
+        present(alertControllerOne, animated: true, completion: nil)
     }
+    
     
     @IBAction func addExpense(_ sender: Any) {
         let alertController = UIAlertController(title: "Add \(typeOfExpense)", message: "Please select the photo option if you want us to auto populate the information for you. Please select the manual entry option if you would like to do this yourself.", preferredStyle: .alert)
@@ -316,7 +329,7 @@ extension ExpenseTableViewController : UITableViewDataSource
 protocol didPersistedDataChange {
     func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd : Float, expenseName : String)
     
-    func dataEditedInPersistedStore(expenseName : String, indexPath : IndexPath, newAmount : Float?, newNote : String?)
+    func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Float?, newNote : String?)
     // so this method is for when a data entry has been changed in the persisted store so we only need to update the amountSpentDict as there is no need to udpate the other dictionatires and take up even more time. So what we want called here is when a data entry has been updated we want to not only update the amountSpent dictionaries but also sync it with the cloud as well.
     // will only be called when data in the persistent store is edited.
     // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N). 

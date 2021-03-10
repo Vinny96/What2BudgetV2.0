@@ -47,7 +47,7 @@ class HomeViewController : UIViewController
     }
     
     //MARK: - CloudKit Functions
-    private func saveRecordToDataBase()
+    private func saveAllRecordsToDataBase()
     {
         // so what we want to do here is we want to get the amountSpent and amountAllocated for each expense and that is what we want to send to the cloud. By doing this we can also get push notifications working where if the user's amountSpent is getting a little bit high we can tell them to rein in the spending.
         let endPeriodAsString = String(defaults.string(forKey: "Set End Date") ?? "00/00/00")
@@ -106,6 +106,12 @@ class HomeViewController : UIViewController
                 present(alertController, animated: true, completion: nil)
             }
         }
+        /**
+         So what we are first checking for here is we are making sure that the user has set a proper date value and the reason for this is we dont want data in the cloud with the default date value as this is going to impact our future queries and functionalties we want to use. So when the use has set a proper date this is where we then run a for loop and create a CKRecord for each expenseName, fill in the appropriate fields and save it to the cloud. 
+         
+         
+         
+         */
     }
     
     
@@ -248,7 +254,7 @@ class HomeViewController : UIViewController
     @IBAction func cloudPressed(_ sender: UIBarButtonItem) {
         let alertControllerOne = UIAlertController(title: "Save To iCloud", message: "This will save all the expense categories and the amount spent for each category to your iCloud and to our private database. ", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Save", style: .default) { (alertActionHandler) in
-            self.saveRecordToDataBase()
+            self.saveAllRecordsToDataBase()
             // call a helper method that will determine which method to call helper method will check to see if any recrods do exist and if they do we can proceed from there
         }
         let alertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
@@ -355,46 +361,69 @@ extension HomeViewController : didPersistedDataChange
             let newNumberOfEntries = safeOriginalNumberOfEntries - 1
             amountSpentDict.updateValue(newAmountSpent, forKey: expenseName)
             numberOfEntriesDict.updateValue(newNumberOfEntries, forKey: expenseName)
+            // we also have to update the CK Record here.
         }
     }
     
     
-    func dataEditedInPersistedStore(expenseName: String, indexPath: IndexPath, newAmount: Float?, newNote : String?) {
+    func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Float?, newNote : String?) {
         let expenseObjectToEdit = arrayOExpenseModelObjects[indexPath.row]
         
         // now we are creating the new expense model object to add
         let newExpenseModelObject = ExpenseModel(context: context)
         newExpenseModelObject.companyName = expenseObjectToEdit.companyName
-        newExpenseModelObject.notes = newNote
+        newExpenseModelObject.typeOfExpense = expenseObjectToEdit.typeOfExpense
+        newExpenseModelObject.notes = expenseObjectToEdit.notes
+        
+        // here we are taking care of the newAmount
         if let safeNewAmount = newAmount
         {
-            newExpenseModelObject.amountSpent = safeNewAmount
+            let oldAmount = expenseObjectToEdit.amountSpent
+            let expenseTypeTotalAmountSpent = amountSpentDict[expenseObjectToEdit.typeOfExpense!]
+            var differenceToAdd = Float()
+            if let safeExpenseTypeTotal = expenseTypeTotalAmountSpent
+            {
+                differenceToAdd = safeExpenseTypeTotal - oldAmount
+                let newAmountToAdd = differenceToAdd + safeNewAmount
+                newExpenseModelObject.amountSpent = newAmountToAdd
+                amountSpentDict.updateValue(newAmountToAdd, forKey: newExpenseModelObject.typeOfExpense!)
+                
+                // we also need to change the value in the context and arrayOfExpenseModelObj
+                arrayOExpenseModelObjects.remove(at: indexPath.row)
+                context.delete(expenseObjectToEdit)
+                arrayOExpenseModelObjects.append(newExpenseModelObject)
+                saveContext()
+                // so here we also need to update the CKRecord
+                updateCKRecord(expenseName: newExpenseModelObject.typeOfExpense!, amountSpent: newAmountToAdd)
+            }
         }
         else
         {
-            newExpenseModelObject.amountSpent = amountSpentDict[expenseName]!
+            newExpenseModelObject.amountSpent = expenseObjectToEdit.amountSpent
         }
-        newExpenseModelObject.receipt = expenseObjectToEdit.receipt
         
-        // we now have to remove the old one from both the array and the context
-        arrayOExpenseModelObjects.remove(at: indexPath.row)
-        context.delete(expenseObjectToEdit)
-        arrayOExpenseModelObjects.append(newExpenseModelObject)
-        saveContext()
-        
-        // now we need to update the record in the database and we have to udate the value in the amountSpentDict
-        let originalValue = amountSpentDict[expenseName]
-        if let safeOriginalValue = originalValue
+        // here we are taking care of the new note
+        if let safeNewNote = newNote
         {
-            if let safeNewAmount = newAmount
-            {
-                let differenceValueForExpenseKey = safeNewAmount - safeOriginalValue
-                let newValueForKey = safeOriginalValue + differenceValueForExpenseKey
-                amountSpentDict.updateValue(newValueForKey, forKey: expenseName)
-                // here we are updating the record in the database
-                updateCKRecord(expenseName: expenseName, amountSpent: newValueForKey)
-            }
+            // so at this point we are just working the persistent store in core data
+            newExpenseModelObject.notes = safeNewNote
+            arrayOExpenseModelObjects.remove(at: indexPath.row)
+            context.delete(expenseObjectToEdit)
+            arrayOExpenseModelObjects.append(newExpenseModelObject)
+            saveContext()
         }
+        
+        /**
+         So for this function we have two optional paramters and they are newAmount and newNote. The reason why we made these two as optional is becaus we want to be able to use this method for both editing the note and editing the amount spent. So when the user only wants to edit the note they would pass in a nil into the newAmount parameter.
+         
+         There is functionality in the code that checks if the newAmount is nil we simply use the old amount spent. However since we are dealing with a database and a persistent store there are some differences that need to be pointed out. When we edit the amount spent for any expense entry whether the user puts in a higher amount or a lower amount we now have to make changes to the CKRecord and to the amountSpent dictionary. However because we edited the amountSpent for an expense entry we also have to edit the persistent store as well. 
+         
+         When we edit the note we have to make sure that we edit the note in the persistent store as well. So we do the same thing here in which we get assign the new note to the newExpenseModelObject,we remove the oldExpenseModelObject both from the context and the array and we append the new one to the array and save it to the context.
+         
+         
+         
+         
+         */
     }
 }
 
@@ -405,7 +434,7 @@ extension HomeViewController : didPersistedDataChange
  We do not need a read operation for our cloud kit database here as we do not to read the data at any point.
  
  
- So what we did here with the didPersistedDataChange is we established a communication pattern between the HomeViewController and the ExpenseTableViewController. So for now what has been implemented and tested to work is the create method and the methods for the protocl all run in constant time. The implementation that was done here is being called in the ExpenseTableViewController so the dictionaries themselves are getting updated and this is thanks to the delegate-protocol communicaiton pattern that was estalibshed between the HomeViewController and ExpenseTableViewController. 
+
  
  
  
