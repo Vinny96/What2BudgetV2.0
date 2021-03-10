@@ -115,21 +115,26 @@ class HomeViewController : UIViewController
     }
     
     
-    private func updateCKRecord(expenseName : String, amountSpent : Float?)
+    private func updateCKRecord(expenseType : String, amountSpent : Float?)
     {
         // we have to make sure that the  expense name recrod dict is not empty before we proceed
         // so we know that if the expenseNameRecordDict is not empty then our cloudDataBase has data inside.
         // this can also account for the situation in which the user just created an entry and then wants to edit it
+        
+        // debugging
+        print(expenseNameRecordDict)
+        // end of debugging 
         if(expenseNameRecordDict.isEmpty == false)
         {
-            let recordToModify = expenseNameRecordDict[expenseName]!
+            print("expenseNameRecordDict is not empty!!!")
+            let recordToModify = expenseNameRecordDict[expenseType]!
             let recordID = recordToModify.recordID
             privateUserCloudDataBase.fetch(withRecordID: recordID) { (recordFetched, error) in
                 if(recordFetched != nil && error == nil)
                 {
                     if let safeAmountSpent = amountSpent
                     {
-                        recordFetched?.setValue(safeAmountSpent, forKey: expenseName)
+                        recordFetched?.setValue(safeAmountSpent, forKey: "amountSpent")
                         self.privateUserCloudDataBase.save(recordFetched!) { (record, error) in
                             if(record != nil && error == nil)
                             {
@@ -137,12 +142,9 @@ class HomeViewController : UIViewController
                             }
                         }
                     }
-                    
                 }
             }
-            
         }
-        
     }
    
     
@@ -331,6 +333,64 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
+    func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Float?, newNote: String?, arrayOfExpenseModelObjectsToUse: inout [ExpenseModel]) {
+        let expenseObjectToEdit = arrayOfExpenseModelObjectsToUse[indexPath.row]
+        
+        // now we are creating the new expense model object to add
+        let newExpenseModelObject = ExpenseModel(context: context)
+        newExpenseModelObject.companyName = expenseObjectToEdit.companyName
+        newExpenseModelObject.typeOfExpense = expenseObjectToEdit.typeOfExpense
+        newExpenseModelObject.notes = expenseObjectToEdit.notes
+        
+        // here we are taking care of the newAmount
+        if let safeNewAmount = newAmount
+        {
+            let oldAmount = expenseObjectToEdit.amountSpent
+            let expenseTypeTotalAmountSpent = amountSpentDict[expenseObjectToEdit.typeOfExpense!]
+            var differenceToAdd = Float()
+            if let safeExpenseTypeTotal = expenseTypeTotalAmountSpent
+            {
+                differenceToAdd = safeExpenseTypeTotal - oldAmount
+                let newAmountToAdd = differenceToAdd + safeNewAmount
+                newExpenseModelObject.amountSpent = safeNewAmount
+                print(safeNewAmount)
+                amountSpentDict.updateValue(newAmountToAdd, forKey: newExpenseModelObject.typeOfExpense!)
+                
+                // we also need to change the value in the context and arrayOfExpenseModelObj
+                arrayOfExpenseModelObjectsToUse.remove(at: indexPath.row)
+                context.delete(expenseObjectToEdit)
+                arrayOfExpenseModelObjectsToUse.append(newExpenseModelObject)
+                saveContext()
+                // so here we also need to update the CKRecord
+                updateCKRecord(expenseType: newExpenseModelObject.typeOfExpense!, amountSpent: newAmountToAdd)
+                // continue working on getting the update method working tableView does not seem to be reloading either
+            }
+        }
+        else
+        {
+            newExpenseModelObject.amountSpent = expenseObjectToEdit.amountSpent
+        }
+        // here we are taking care of the new note
+        if let safeNewNote = newNote
+        {
+            // so at this point we are just working the persistent store in core data
+            print("running from inside here")
+            newExpenseModelObject.notes = safeNewNote
+            arrayOExpenseModelObjects.remove(at: indexPath.row)
+            context.delete(expenseObjectToEdit)
+            arrayOExpenseModelObjects.append(newExpenseModelObject)
+            saveContext()
+        }
+        
+        /**
+         So for this function we have two optional paramters and they are newAmount and newNote. The reason why we made these two as optional is becaus we want to be able to use this method for both editing the note and editing the amount spent. So when the user only wants to edit the note they would pass in a nil into the newAmount parameter.
+         
+         There is functionality in the code that checks if the newAmount is nil we simply use the old amount spent. However since we are dealing with a database and a persistent store there are some differences that need to be pointed out. When we edit the amount spent for any expense entry whether the user puts in a higher amount or a lower amount we now have to make changes to the CKRecord and to the amountSpent dictionary. However because we edited the amountSpent for an expense entry we also have to edit the persistent store as well.
+         
+         When we edit the note we have to make sure that we edit the note in the persistent store as well. So we do the same thing here in which we get assign the new note to the newExpenseModelObject,we remove the oldExpenseModelObject both from the context and the array and we append the new one to the array and save it to the context.
+         */
+    }
+    
     func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd: Float, expenseName: String) {
         let originalAmount = amountSpentDict[expenseName]
         if let safeOriginalAmount = originalAmount
@@ -363,67 +423,6 @@ extension HomeViewController : didPersistedDataChange
             numberOfEntriesDict.updateValue(newNumberOfEntries, forKey: expenseName)
             // we also have to update the CK Record here.
         }
-    }
-    
-    
-    func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Float?, newNote : String?) {
-        let expenseObjectToEdit = arrayOExpenseModelObjects[indexPath.row]
-        
-        // now we are creating the new expense model object to add
-        let newExpenseModelObject = ExpenseModel(context: context)
-        newExpenseModelObject.companyName = expenseObjectToEdit.companyName
-        newExpenseModelObject.typeOfExpense = expenseObjectToEdit.typeOfExpense
-        newExpenseModelObject.notes = expenseObjectToEdit.notes
-        
-        // here we are taking care of the newAmount
-        if let safeNewAmount = newAmount
-        {
-            let oldAmount = expenseObjectToEdit.amountSpent
-            let expenseTypeTotalAmountSpent = amountSpentDict[expenseObjectToEdit.typeOfExpense!]
-            var differenceToAdd = Float()
-            if let safeExpenseTypeTotal = expenseTypeTotalAmountSpent
-            {
-                differenceToAdd = safeExpenseTypeTotal - oldAmount
-                let newAmountToAdd = differenceToAdd + safeNewAmount
-                newExpenseModelObject.amountSpent = newAmountToAdd
-                amountSpentDict.updateValue(newAmountToAdd, forKey: newExpenseModelObject.typeOfExpense!)
-                
-                // we also need to change the value in the context and arrayOfExpenseModelObj
-                arrayOExpenseModelObjects.remove(at: indexPath.row)
-                context.delete(expenseObjectToEdit)
-                arrayOExpenseModelObjects.append(newExpenseModelObject)
-                saveContext()
-                // so here we also need to update the CKRecord
-                updateCKRecord(expenseName: newExpenseModelObject.typeOfExpense!, amountSpent: newAmountToAdd)
-            }
-        }
-        else
-        {
-            newExpenseModelObject.amountSpent = expenseObjectToEdit.amountSpent
-        }
-        
-        // here we are taking care of the new note
-        if let safeNewNote = newNote
-        {
-            // so at this point we are just working the persistent store in core data
-            newExpenseModelObject.notes = safeNewNote
-            arrayOExpenseModelObjects.remove(at: indexPath.row)
-            context.delete(expenseObjectToEdit)
-            arrayOExpenseModelObjects.append(newExpenseModelObject)
-            saveContext()
-        }
-        
-        /**
-         So for this function we have two optional paramters and they are newAmount and newNote. The reason why we made these two as optional is becaus we want to be able to use this method for both editing the note and editing the amount spent. So when the user only wants to edit the note they would pass in a nil into the newAmount parameter.
-         
-         There is functionality in the code that checks if the newAmount is nil we simply use the old amount spent. However since we are dealing with a database and a persistent store there are some differences that need to be pointed out. When we edit the amount spent for any expense entry whether the user puts in a higher amount or a lower amount we now have to make changes to the CKRecord and to the amountSpent dictionary. However because we edited the amountSpent for an expense entry we also have to edit the persistent store as well. 
-         
-         When we edit the note we have to make sure that we edit the note in the persistent store as well. So we do the same thing here in which we get assign the new note to the newExpenseModelObject,we remove the oldExpenseModelObject both from the context and the array and we append the new one to the array and save it to the context.
-         
-         
-         
-         
-         */
     }
 }
 

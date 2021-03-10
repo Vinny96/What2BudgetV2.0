@@ -158,12 +158,14 @@ class ExpenseTableViewController : UIViewController
         let mainAlertActionEditAmount = UIAlertAction(title: "Edit Amount Spent", style: .destructive) { (editAmountHandler) in
             DispatchQueue.main.async {
                 self.editAmountSpent(indexPath: indexPath)
+                //self.tableView.reloadRows(at: [indexPath], with: .left)
             }
         }
         
         let mainAlertActionEditNote = UIAlertAction(title: "Edit Note", style: .destructive) { (editNoteHandler) in
             DispatchQueue.main.async {
                 self.editNote(indexPath: indexPath)
+                //self.tableView.reloadRows(at: [indexPath], with: .left)
             }
         }
         
@@ -171,11 +173,17 @@ class ExpenseTableViewController : UIViewController
             DispatchQueue.main.async {
                 self.editAmountSpent(indexPath: indexPath)
                 self.editNote(indexPath: indexPath)
+                //self.tableView.reloadRows(at: [indexPath], with: .left)
             }
         }
+        
+        let mainAlertActionCancel = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        
+        
         mainAlertController.addAction(mainAlertActionEditAmount)
         mainAlertController.addAction(mainAlertActionEditNote)
         mainAlertController.addAction(mainAlertActionEditBoth)
+        mainAlertController.addAction(mainAlertActionCancel)
         self.present(mainAlertController, animated: true, completion: nil)
         
         /*
@@ -200,7 +208,8 @@ class ExpenseTableViewController : UIViewController
             {
                 let newAmountAsFloat = (textField.text! as NSString).floatValue
                 let noteToPass : String? = nil
-                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass)
+                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
+                self.tableView.reloadRows(at: [indexPath], with: .left)
             }
             else
             {
@@ -232,7 +241,8 @@ class ExpenseTableViewController : UIViewController
             {
                 let newNote = textField.text!
                 let newAmount : Float? = nil
-                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmount, newNote: newNote)
+                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmount, newNote: newNote, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
+                self.tableView.reloadRows(at: [indexPath], with: .left)
             }
             else
             {
@@ -302,7 +312,22 @@ class ExpenseTableViewController : UIViewController
 //MARK: - TableView Extensions
 extension ExpenseTableViewController : UITableViewDelegate
 {
-    
+    // so we want the edit option to be available on the trailing edge of the tableViewCell
+    func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let contextualAction = UIContextualAction(style: .destructive, title: "Edit") { (contextualActionHandler, viewHandler, completionHandler) in
+            DispatchQueue.main.async {
+                self.editExpenseEntry(indexPath: indexPath)
+            }
+        }
+        contextualAction.backgroundColor = .systemRed
+        contextualAction.image = UIImage(systemName: "pencil")
+        let configuration : UISwipeActionsConfiguration = UISwipeActionsConfiguration(actions: [contextualAction])
+        configuration.performsFirstActionWithFullSwipe = true
+        return configuration
+        /**
+         So here we are calling the editExpenseEntry method from above which will take care of the editing process.
+         */
+    }
 }
 
 extension ExpenseTableViewController : UITableViewDataSource
@@ -317,6 +342,11 @@ extension ExpenseTableViewController : UITableViewDataSource
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "expenseCellToUse", for: indexPath) as! expenseCell
+        // settings the cells value to nil due to how the recylcing works
+        cell.amountSpent.text = ""
+        cell.providerTitle.text = ""
+        cell.notes.text = ""
+        // end of process
         cell.amountSpent.text = String(arrayOfExpenses[indexPath.row].amountSpent)
         cell.providerTitle.text = arrayOfExpenses[indexPath.row].companyName
         cell.notes.text = arrayOfExpenses[indexPath.row].notes
@@ -329,7 +359,7 @@ extension ExpenseTableViewController : UITableViewDataSource
 protocol didPersistedDataChange {
     func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd : Float, expenseName : String)
     
-    func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Float?, newNote : String?)
+    func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Float?, newNote : String?, arrayOfExpenseModelObjectsToUse : inout [ExpenseModel])
     // so this method is for when a data entry has been changed in the persisted store so we only need to update the amountSpentDict as there is no need to udpate the other dictionatires and take up even more time. So what we want called here is when a data entry has been updated we want to not only update the amountSpent dictionaries but also sync it with the cloud as well.
     // will only be called when data in the persistent store is edited.
     // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N). 
