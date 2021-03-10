@@ -21,7 +21,7 @@ class HomeViewController : UIViewController
     
     var numberOfEntriesDict : [String : Int] = [ExpenseNames.groceriesExpenseName : 0,ExpenseNames.transportationExpenseName : 0,ExpenseNames.carExpenseName: 0,ExpenseNames.lifeStyleExpenseName : 0,ExpenseNames.shoppingExpenseName : 0,ExpenseNames.subscriptionsExpenseName : 0,]
     
-    var expenseNameRecordDict : [String : CKRecord] = [:]
+    var expenseTypeRecordDict : [String : CKRecord] = [:]
     
     var arrayOfExpenseNames : [String] = [ExpenseNames.groceriesExpenseName,ExpenseNames.transportationExpenseName,ExpenseNames.carExpenseName,ExpenseNames.lifeStyleExpenseName,ExpenseNames.shoppingExpenseName,ExpenseNames.subscriptionsExpenseName]
     
@@ -87,7 +87,7 @@ class HomeViewController : UIViewController
                         if let safeRecord = record
                         {
                             print(safeRecord)
-                            self.expenseNameRecordDict.updateValue(safeRecord, forKey: expenseName)
+                            self.expenseTypeRecordDict.updateValue(safeRecord, forKey: expenseName)
                         }
                     }
                     else
@@ -122,12 +122,12 @@ class HomeViewController : UIViewController
         // this can also account for the situation in which the user just created an entry and then wants to edit it
         
         // debugging
-        print(expenseNameRecordDict)
+        print(expenseTypeRecordDict)
         // end of debugging 
-        if(expenseNameRecordDict.isEmpty == false)
+        if(expenseTypeRecordDict.isEmpty == false)
         {
             print("expenseNameRecordDict is not empty!!!")
-            let recordToModify = expenseNameRecordDict[expenseType]!
+            let recordToModify = expenseTypeRecordDict[expenseType]!
             let recordID = recordToModify.recordID
             privateUserCloudDataBase.fetch(withRecordID: recordID) { (recordFetched, error) in
                 if(recordFetched != nil && error == nil)
@@ -148,20 +148,6 @@ class HomeViewController : UIViewController
     }
    
     
-  
-    
-    private func saveAndUpdateToCloudHandler() // this is the function that we want to be either saving to the cloud or updating to the cloud
-    {
-        // how is this going to work
-        // so this is going to be the function that will be called when it comes to saving or updating to the cloud. We then want this function to check the cloudDB and see if any records exist and if they do we then rpoceed to call the updateRecord function. However if no records exists that match the dateEndingPeriod then we save them to the cloudDB.
-        // So to check to see if any records exist in the DB that end with the current endingPeriod we can do a simple query and if any recrods are fetched we can assign a boolean to true. This means that we have to update the records instead and if no records exist the boolean will be false so this means we have to save the records instead.
-        // to check if the database has any records we can simply just pull one random record using any expenseName and the current endingDatePeriod because if this does not exist then there are no records at all. If they do exist then there are records
-        
-        
-        
-        
-    }
-    
     // MARK: - Functions
     private func initializeVC()
     {
@@ -175,6 +161,7 @@ class HomeViewController : UIViewController
         resetAllDictionaries()
         initializeAmountSpentDic()
         initializeNumberOfEntriesSpentDict()
+        initializeExpenseNameRecordDict()
         print("View Controller is being initialized.")
     }
     
@@ -209,6 +196,34 @@ class HomeViewController : UIViewController
         }
         print(numberOfEntriesDict)
     }
+    
+    private func initializeExpenseNameRecordDict()
+    {
+        // this needs to be run on viewDidLoad
+        // so easiest way to do this is to run a for loop for each expenseName search the cloudDataBase to see if it exists if not this means the user has not uploaded anything to the cloud yet
+        for expenseName in arrayOfExpenseNames
+        {
+            let predicate = NSPredicate(format: "expenseType == %@", expenseName)
+            let query = CKQuery(recordType: "Expense", predicate: predicate)
+            let queryOperation = CKQueryOperation(query: query)
+            queryOperation.recordFetchedBlock = { record in
+                print(record)
+                self.expenseTypeRecordDict.updateValue(record, forKey: expenseName)
+            }
+            privateUserCloudDataBase.add(queryOperation)
+        }
+        /*
+         So reason why we are creating this method is that we need to have our dictionary match the CKRecords in the cloud. So everytime the app is loaded we are going to run
+         this query operation and see if the record exists in the cloud. Now if one record does not exist all of them do not exist as when we run the cloud IBAction records for
+         all of the expenses will be created. So the moment one does not exist we can break out of the loop and this means the user has to create entries first. However if the user
+         does have entries then the loop will continue populating our dictionary with the records from the cloud. This method is only run on load.
+         
+         This does have a runtime of N*M N being the number of expenseNames in arrayOfExpenseNames and M being the number of elements in the cloud database as it needs to go through M elementa in the worst case. 
+         
+         */
+    }
+    
+    
     
     private func resetAllDictionaries() // this method is called everytime the view will appear. Does not reset the expenseRecordName dictionary
     {
@@ -318,6 +333,9 @@ extension HomeViewController : UITableViewDataSource
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "mainCellToUse", for: indexPath) as! mainTableViewCell
+        // setting the cells IBOutlets to nil due to the recycling process
+        resetCell(cellToReuse: cell)
+        // end of setting the cells IBOutlets to nil
         cell.expenseTitle.text = arrayOfExpenseNames[indexPath.row]
         cell.amountAllocated.text = String(defaults.float(forKey: arrayOfExpenseNames[indexPath.row]))
         cell.numberOfEntries.text = String(numberOfEntriesDict[arrayOfExpenseNames[indexPath.row]] ?? 0)
@@ -327,6 +345,14 @@ extension HomeViewController : UITableViewDataSource
     
     func numberOfSections(in tableView: UITableView) -> Int {
         return 1
+    }
+    
+    private func resetCell(cellToReuse : mainTableViewCell)
+    {
+        cellToReuse.amountAllocated.text = ""
+        cellToReuse.amountSpent.text = ""
+        cellToReuse.expenseTitle.text = ""
+        cellToReuse.numberOfEntries.text = ""
     }
 }
 
@@ -381,7 +407,7 @@ extension HomeViewController : didPersistedDataChange
             arrayOExpenseModelObjects.append(newExpenseModelObject)
             saveContext()
         }
-        
+        //tableView.reloadRows(at: [indexPath], with: .left)
         /**
          So for this function we have two optional paramters and they are newAmount and newNote. The reason why we made these two as optional is becaus we want to be able to use this method for both editing the note and editing the amount spent. So when the user only wants to edit the note they would pass in a nil into the newAmount parameter.
          
@@ -399,6 +425,8 @@ extension HomeViewController : didPersistedDataChange
             amountSpentDict.updateValue(newAmount, forKey: expenseName)
             print(amountSpentDict)
         }
+        // we should also find out which row to specifically reload to be more efficient
+        tableView.reloadData()
     }
     
     func addToNumberOfEntriesDict(expenseKey : String)
@@ -410,7 +438,10 @@ extension HomeViewController : didPersistedDataChange
             numberOfEntriesDict.updateValue(newValue, forKey: expenseKey)
             print(numberOfEntriesDict)
         }
+        tableView.reloadData()
     }
+    
+    
     
     func dataDeletedInPersistedStore(expenseName: String, objectToDelete amountSpent: Float) {
         let originalAmountSpent = amountSpentDict[expenseName]
@@ -424,15 +455,25 @@ extension HomeViewController : didPersistedDataChange
             // we also have to update the CK Record here.
         }
     }
+    
+    
+    func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj: ExpenseModel) {
+        let expenseType = expenseModelObj.typeOfExpense!
+        let expenseTotalAmount = amountSpentDict[expenseType]!
+        updateCKRecord(expenseType: expenseType, amountSpent: expenseTotalAmount)
+    }
+    
 }
 
-//MARK: - Explanation
+
+
+//MARK: - Notes
 /*
  the varible currentRecord refers to records whose endingTimePeriod is the exact same as the endingDate as our DataBase will also contain older recrods that we want to have so the user can compare any of the older records with the newer ones.
  
  We do not need a read operation for our cloud kit database here as we do not to read the data at any point.
  
- 
+ So we want to add a button that is disabled when changes have been synched with the cloud and and enabled when changes have been synched with the cloud. So when the changes have bnot been synched idelaly we want the user to press the button and it will tell them that their most recent changes have not been synced with the cloud.
 
  
  

@@ -18,7 +18,8 @@ class ExpenseTableViewController : UIViewController
     var endDateAsString : String = String()
     var typeOfExpense : String = String()
     
-
+    // beta variables
+    
     
     
     // IB Outlets
@@ -76,6 +77,8 @@ class ExpenseTableViewController : UIViewController
                     {
                         safePersistedDidChangeDelegate.addToAmountSpentDict(amountFromNewExpenseObject: expenseObjToAdd.amountSpent, expenseName: expenseObjToAdd.typeOfExpense!)
                         safePersistedDidChangeDelegate.addToNumberOfEntriesDict(expenseKey: expenseObjToAdd.typeOfExpense!)
+                        // call a method that will update the CKRecord in the cloudKitDataBase and we can pass in the expenseObjToAdd
+                        safePersistedDidChangeDelegate.expenseModelObjectAdded(expenseModelObjectAdded: expenseObjToAdd)
                         print("Delegate methods should be getting called by now.")
                     }
                 }
@@ -259,7 +262,7 @@ class ExpenseTableViewController : UIViewController
     }
     
     
-    @IBAction func addExpense(_ sender: Any) {
+    @IBAction func addExpense(_ sender: UIBarButtonItem) {
         let alertController = UIAlertController(title: "Add \(typeOfExpense)", message: "Please select the photo option if you want us to auto populate the information for you. Please select the manual entry option if you would like to do this yourself.", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Take Photo", style: .default) { (alertActionOne) in
             print("The take photo option was pressed.")
@@ -276,6 +279,7 @@ class ExpenseTableViewController : UIViewController
         alertController.addAction(alertActionThree)
         present(alertController, animated: true, completion: nil)
     }
+    
     
     
  // MARK: - CRUD Functionality
@@ -357,16 +361,20 @@ extension ExpenseTableViewController : UITableViewDataSource
 
 //MARK: - Protocols
 protocol didPersistedDataChange {
+    
     func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd : Float, expenseName : String)
     
     func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Float?, newNote : String?, arrayOfExpenseModelObjectsToUse : inout [ExpenseModel])
     // so this method is for when a data entry has been changed in the persisted store so we only need to update the amountSpentDict as there is no need to udpate the other dictionatires and take up even more time. So what we want called here is when a data entry has been updated we want to not only update the amountSpent dictionaries but also sync it with the cloud as well.
     // will only be called when data in the persistent store is edited.
-    // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N). 
+    // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N).
     
     func addToNumberOfEntriesDict(expenseKey : String)
     // so here is where we are going to be adding to the numberOfEntriesDict and we can do this in constant time rather than having to reset everything and run the whole thing again
     
     func dataDeletedInPersistedStore(expenseName : String, objectToDelete amountSpent : Float)
+    
+    func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj : ExpenseModel)
 }
+
 
