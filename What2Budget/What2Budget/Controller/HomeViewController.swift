@@ -268,7 +268,7 @@ class HomeViewController : UIViewController
         performSegue(withIdentifier: "toSettings", sender: self)
     }
     
-    @IBAction func cloudPressed(_ sender: UIBarButtonItem) {
+    @IBAction func syncPressed(_ sender: UIBarButtonItem) {
         let alertControllerOne = UIAlertController(title: "Save To iCloud", message: "This will save all the expense categories and the amount spent for each category to your iCloud and to our private database. ", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Save", style: .default) { (alertActionHandler) in
             self.saveAllRecordsToDataBase()
@@ -402,11 +402,12 @@ extension HomeViewController : didPersistedDataChange
             // so at this point we are just working the persistent store in core data
             print("running from inside here")
             newExpenseModelObject.notes = safeNewNote
-            arrayOExpenseModelObjects.remove(at: indexPath.row)
+            arrayOfExpenseModelObjectsToUse.remove(at: indexPath.row)
             context.delete(expenseObjectToEdit)
-            arrayOExpenseModelObjects.append(newExpenseModelObject)
+            arrayOfExpenseModelObjectsToUse.append(newExpenseModelObject)
             saveContext()
         }
+        
         //tableView.reloadRows(at: [indexPath], with: .left)
         /**
          So for this function we have two optional paramters and they are newAmount and newNote. The reason why we made these two as optional is becaus we want to be able to use this method for both editing the note and editing the amount spent. So when the user only wants to edit the note they would pass in a nil into the newAmount parameter.
@@ -443,7 +444,7 @@ extension HomeViewController : didPersistedDataChange
     
     
     
-    func dataDeletedInPersistedStore(expenseName: String, objectToDelete amountSpent: Float) {
+    func dataDeletedInPersistedStore(expenseName: String, amountSpent: Float) {
         let originalAmountSpent = amountSpentDict[expenseName]
         let originalNumberOfEntires = numberOfEntriesDict[expenseName]
         if let safeOriginalAmountSpent = originalAmountSpent, let safeOriginalNumberOfEntries = originalNumberOfEntires
@@ -453,6 +454,7 @@ extension HomeViewController : didPersistedDataChange
             amountSpentDict.updateValue(newAmountSpent, forKey: expenseName)
             numberOfEntriesDict.updateValue(newNumberOfEntries, forKey: expenseName)
             // we also have to update the CK Record here.
+            updateCKRecord(expenseType: expenseName, amountSpent: newAmountSpent)
         }
     }
     

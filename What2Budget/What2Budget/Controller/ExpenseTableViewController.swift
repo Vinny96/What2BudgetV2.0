@@ -191,7 +191,9 @@ class ExpenseTableViewController : UIViewController
         
         /*
             So what we did here is we split the three buttons into their own functionalities rather than having them all in one functionality. So for editiing the amountSpent we have
-            a funcion that deals only with that and for editing the note we have a function that deals only with that. When it comes to editing both we just called both methods. Only issue with efficiency here is that when we execute both methods we are also attempting to remove it from the context twice this could lead to an addtional O(N) search and this can be optimized. 
+            a funcion that deals only with that and for editing the note we have a function that deals only with that. When it comes to editing both we just called both methods. Only issue with efficiency here is that when we execute both methods we are also attempting to remove it from the context twice this could lead to an addtional O(N) search and this can be optimized.
+         
+            So there is an issue here that we need to fix. The issue is we are deleting the expenseModel from the correct indexpath and we are appending the new expenseModel to the end of the array. Yet when we call reloadRows we are reloading the row where we just deleted the expenseModel in the so it is loading the next avaialble one. Check the trello for more details.
          
          */
     }
@@ -213,6 +215,7 @@ class ExpenseTableViewController : UIViewController
                 let noteToPass : String? = nil
                 self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
                 self.tableView.reloadRows(at: [indexPath], with: .left)
+                print("The index path we are working on is the following : \(indexPath.row)")
             }
             else
             {
@@ -246,6 +249,7 @@ class ExpenseTableViewController : UIViewController
                 let newAmount : Float? = nil
                 self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmount, newNote: newNote, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
                 self.tableView.reloadRows(at: [indexPath], with: .left)
+                print(indexPath.row)
             }
             else
             {
@@ -255,10 +259,28 @@ class ExpenseTableViewController : UIViewController
                 self.present(internalAlertController, animated: true, completion: nil)
             }
         }
-        let alertControllerOneCancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        let alertControllerOneCancelAction = UIAlertAction(title: "Cancel", style: .cancel) { (cancelActionHandler) in
+            DispatchQueue.main.async {
+                self.tableView.reloadRows(at: [indexPath], with: .fade)
+            }
+        }
         alertControllerOne.addAction(alertControllerOneSaveAction)
         alertControllerOne.addAction(alertControllerOneCancelAction)
         present(alertControllerOne, animated: true, completion: nil)
+    }
+    
+    private func deleteExpenseEntry(indexPath : IndexPath)
+    {
+        // first thing we need to do is remove the entry from the array
+        // then we need to update the dictionaries in the previous method
+        let expenseModelObjToDelete = arrayOfExpenses[indexPath.row]
+        let expenseType = expenseModelObjToDelete.typeOfExpense
+        let amountSpentToPass = expenseModelObjToDelete.amountSpent
+        didPersistedChangeDelegate?.dataDeletedInPersistedStore(expenseName: expenseType!, amountSpent: amountSpentToPass)
+        context.delete(expenseModelObjToDelete)
+        arrayOfExpenses.remove(at: indexPath.row)
+        saveContext()
+        self.tableView.reloadData()
     }
     
     
@@ -320,10 +342,17 @@ extension ExpenseTableViewController : UITableViewDelegate
     func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let contextualAction = UIContextualAction(style: .destructive, title: "Edit") { (contextualActionHandler, viewHandler, completionHandler) in
             DispatchQueue.main.async {
-                self.editExpenseEntry(indexPath: indexPath)
+                let alertController = UIAlertController(title: "Delete Entry", message: "Please confirm if you would like to delete the entry.", preferredStyle: .alert)
+                let alertActionOne = UIAlertAction(title: "Yes", style: .destructive) { (alertActionOneHandler) in
+                    self.deleteExpenseEntry(indexPath: indexPath)
+                }
+                let alertActionTwo = UIAlertAction(title: "No", style: .cancel, handler: nil)
+                alertController.addAction(alertActionOne)
+                alertController.addAction(alertActionTwo)
+                self.present(alertController, animated: true, completion: nil)
             }
         }
-        contextualAction.backgroundColor = .systemRed
+        contextualAction.backgroundColor = .systemGreen
         contextualAction.image = UIImage(systemName: "pencil")
         let configuration : UISwipeActionsConfiguration = UISwipeActionsConfiguration(actions: [contextualAction])
         configuration.performsFirstActionWithFullSwipe = true
@@ -332,6 +361,20 @@ extension ExpenseTableViewController : UITableViewDelegate
          So here we are calling the editExpenseEntry method from above which will take care of the editing process.
          */
     }
+    
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let contextulAction = UIContextualAction(style: .destructive, title: "Delete") { (contextualActionHandler, view, completionHandler) in
+            DispatchQueue.main.async {
+                self.deleteExpenseEntry(indexPath: indexPath)
+            }
+        }
+        contextulAction.backgroundColor = .systemRed
+        contextulAction.image = UIImage(systemName: "trash.fill")
+        let configuration : UISwipeActionsConfiguration = UISwipeActionsConfiguration(actions: [contextulAction])
+        configuration.performsFirstActionWithFullSwipe = true
+        return configuration
+    }
+    
 }
 
 extension ExpenseTableViewController : UITableViewDataSource
@@ -347,9 +390,7 @@ extension ExpenseTableViewController : UITableViewDataSource
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "expenseCellToUse", for: indexPath) as! expenseCell
         // settings the cells value to nil due to how the recylcing works
-        cell.amountSpent.text = ""
-        cell.providerTitle.text = ""
-        cell.notes.text = ""
+        resetCell(cellToReuse: cell)
         // end of process
         cell.amountSpent.text = String(arrayOfExpenses[indexPath.row].amountSpent)
         cell.providerTitle.text = arrayOfExpenses[indexPath.row].companyName
@@ -357,6 +398,12 @@ extension ExpenseTableViewController : UITableViewDataSource
         return cell
     }
     
+    private func resetCell(cellToReuse : expenseCell)
+    {
+        cellToReuse.amountSpent.text = " "
+        cellToReuse.providerTitle.text = " "
+        cellToReuse.notes.text = " "
+    }
 }
 
 //MARK: - Protocols
@@ -372,7 +419,7 @@ protocol didPersistedDataChange {
     func addToNumberOfEntriesDict(expenseKey : String)
     // so here is where we are going to be adding to the numberOfEntriesDict and we can do this in constant time rather than having to reset everything and run the whole thing again
     
-    func dataDeletedInPersistedStore(expenseName : String, objectToDelete amountSpent : Float)
+    func dataDeletedInPersistedStore(expenseName : String, amountSpent : Float)
     
     func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj : ExpenseModel)
 }
