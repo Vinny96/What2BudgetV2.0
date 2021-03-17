@@ -109,7 +109,7 @@ class HomeViewController : UIViewController
         /**
          So what we are first checking for here is we are making sure that the user has set a proper date value and the reason for this is we dont want data in the cloud with the default date value as this is going to impact our future queries and functionalties we want to use. So when the use has set a proper date this is where we then run a for loop and create a CKRecord for each expenseName, fill in the appropriate fields and save it to the cloud. 
          
-         
+         So if our dictionary is empty it means that the user has not synced to the cloud yet.If the dictionary is not empty it means that there are records in the cloud and it has been synced with the cloud as the add, delete and  update methods all update the existing record. 
          
          */
     }
@@ -201,17 +201,26 @@ class HomeViewController : UIViewController
     {
         // this needs to be run on viewDidLoad
         // so easiest way to do this is to run a for loop for each expenseName search the cloudDataBase to see if it exists if not this means the user has not uploaded anything to the cloud yet
-        for expenseName in arrayOfExpenseNames
+        let endingTimePeriodAsString = defaults.string(forKey: "Set End Date")
+        if let safeEndingTimePeriodAsString = endingTimePeriodAsString
         {
-            let predicate = NSPredicate(format: "expenseType == %@", expenseName)
-            let query = CKQuery(recordType: "Expense", predicate: predicate)
-            let queryOperation = CKQueryOperation(query: query)
-            queryOperation.recordFetchedBlock = { record in
-                print(record)
-                self.expenseTypeRecordDict.updateValue(record, forKey: expenseName)
+            for expenseName in arrayOfExpenseNames
+            {
+                // add another predicate that will allow us to filter by date
+                let predicate = NSPredicate(format: "expenseType == %@", expenseName)
+                let predicateTwo = NSPredicate(format: "endingTimePeriod == %@", safeEndingTimePeriodAsString)
+               // let query = CKQuery(recordType: "Expense", predicate: predicate)
+                let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate,predicateTwo])
+                let query = CKQuery(recordType: "Expense", predicate: compoundPredicate)
+                let queryOperation = CKQueryOperation(query: query)
+                queryOperation.recordFetchedBlock = { record in
+                    print("Record was successfully fetched.")
+                    self.expenseTypeRecordDict.updateValue(record, forKey: expenseName)
+                }
+                privateUserCloudDataBase.add(queryOperation)
             }
-            privateUserCloudDataBase.add(queryOperation)
         }
+        
         /*
          So reason why we are creating this method is that we need to have our dictionary match the CKRecords in the cloud. So everytime the app is loaded we are going to run
          this query operation and see if the record exists in the cloud. Now if one record does not exist all of them do not exist as when we run the cloud IBAction records for
@@ -222,8 +231,6 @@ class HomeViewController : UIViewController
          
          */
     }
-    
-    
     
     private func resetAllDictionaries() // this method is called everytime the view will appear. Does not reset the expenseRecordName dictionary
     {
@@ -236,6 +243,29 @@ class HomeViewController : UIViewController
         
     }
     
+    private func isCloudDataUpToDate()
+    {
+        if(expenseTypeRecordDict.isEmpty == false)
+        {
+            let alertControllerToPresent = UIAlertController(title: "Data Is Synced ", message: "Your data is already synced with your personal iCloud.", preferredStyle: .alert)
+            let alertControllerAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
+            alertControllerToPresent.addAction(alertControllerAction)
+            present(alertControllerToPresent, animated: true, completion: nil)
+        }
+        else
+        {
+            let alertControllerToPresent = UIAlertController(title: "Sync Data with personal iCloud", message: "Please choose one of the options ", preferredStyle: .alert)
+            let alertActionOne = UIAlertAction(title: "Yes", style: .destructive) { (alertActionOneHandler) in
+                self.saveAllRecordsToDataBase()
+            }
+            let alertActionTwo = UIAlertAction(title: "No", style: .cancel, handler: nil)
+            alertControllerToPresent.addAction(alertActionOne)
+            alertControllerToPresent.addAction(alertActionTwo)
+            present(alertControllerToPresent, animated: true, completion: nil)
+        }
+        // So this method is going to act as the safety check to see if we already have records in the cloudkit database. 
+        
+    }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if(segue.identifier == "toSettings")
@@ -258,6 +288,7 @@ class HomeViewController : UIViewController
                     destinationVC.endDateAsString = safeEndDate
                 }
             }
+            // we also need to create the observers for the push notification here. 
             destinationVC.didPersistedChangeDelegate = self
         }
     }
@@ -271,8 +302,7 @@ class HomeViewController : UIViewController
     @IBAction func syncPressed(_ sender: UIBarButtonItem) {
         let alertControllerOne = UIAlertController(title: "Save To iCloud", message: "This will save all the expense categories and the amount spent for each category to your iCloud and to our private database. ", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Save", style: .default) { (alertActionHandler) in
-            self.saveAllRecordsToDataBase()
-            // call a helper method that will determine which method to call helper method will check to see if any recrods do exist and if they do we can proceed from there
+            self.isCloudDataUpToDate()
         }
         let alertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
         alertControllerOne.addAction(alertActionOne)
@@ -449,7 +479,11 @@ extension HomeViewController : didPersistedDataChange
         let originalNumberOfEntires = numberOfEntriesDict[expenseName]
         if let safeOriginalAmountSpent = originalAmountSpent, let safeOriginalNumberOfEntries = originalNumberOfEntires
         {
-            let newAmountSpent = safeOriginalAmountSpent - amountSpent
+            var newAmountSpent = safeOriginalAmountSpent - amountSpent
+            if(newAmountSpent < 0)
+            {
+                newAmountSpent = 0
+            }
             let newNumberOfEntries = safeOriginalNumberOfEntries - 1
             amountSpentDict.updateValue(newAmountSpent, forKey: expenseName)
             numberOfEntriesDict.updateValue(newNumberOfEntries, forKey: expenseName)
@@ -464,6 +498,12 @@ extension HomeViewController : didPersistedDataChange
         let expenseTotalAmount = amountSpentDict[expenseType]!
         updateCKRecord(expenseType: expenseType, amountSpent: expenseTotalAmount)
     }
+    
+    /**
+     So here for the expenseModelObjectAdded, dataEdtied and dataDeleted we also call the updateCKRecord method. The point of this is so the users data with the cloud is up to date with the expenseModel entries on their device. The records in their cloud database will be updated so it will overwrite the old ones. 
+     
+     
+     */
     
 }
 

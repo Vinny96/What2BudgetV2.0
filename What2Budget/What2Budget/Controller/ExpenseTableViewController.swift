@@ -424,4 +424,10 @@ protocol didPersistedDataChange {
     func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj : ExpenseModel)
 }
 
-
+//MARK: - Notes
+/**
+ So here what we need to do is we need to create a method here that will do the calculations for us. So we will need a method that will retrieve the total amountSpent for that expense category
+ and compare it to the total amount allocated. If this method does meet or exceed 75% of the total amount allocated we will post a notification and use the notification observer communcation pattern. Inside the observer this is where we will run the server code and get the server to send a push notification informing the user that they are about 75% of their allocated amount. So now we need to post the notification in the dataEditedInPersistedStore method. When the user deletes the data we do not want to post any notifications here. 
+ 
+ 
+ */
