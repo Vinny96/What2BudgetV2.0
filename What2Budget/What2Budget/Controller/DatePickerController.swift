@@ -7,12 +7,26 @@
 
 import Foundation
 import UIKit
+import CloudKit
 
 class DatePickerController : UIViewController
 {
     //variables
-    internal var dateKey : String = String()
+    internal var dateKey : String = String() // the date key is what determines where the date is for the starting date or for the ending date.
+    private var dateKeyAsDate : String {
+        if(dateKey == "Set Start Date")
+        {
+            let stringToReturn = "Start Date"
+            return stringToReturn
+        }
+        else
+        {
+            let stringToReturn = "End Date"
+            return stringToReturn
+        }
+    }
     private let defaults = UserDefaults.standard
+    private let userCloudDB = CKContainer(identifier: "iCloud.vinnyMadeApps.What2Budget").privateCloudDatabase
     
     //IB Outlets
     @IBOutlet weak var datePicker: UIDatePicker!
@@ -20,23 +34,74 @@ class DatePickerController : UIViewController
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = dateKey
+        initializeVC()
     }
     
     //MARK: - Functions
+    
+    private func initializeVC()
+    {
+        title = dateKey
+        initializeDatePicker()
+    }
+    
     private func initializeDatePicker()
+    {
+        let dateToDisplay = defaults.value(forKey: dateKeyAsDate) as! Date
+        datePicker.date = dateToDisplay
+    }
+    
+    private func deleteObjectsInContext()
+    {
+        // so what we want to do here is delete all of the records in the cloud, delete everything in the context and the two dictionaries
+        
+    }
+    
+    private func deleteRecordsInCloud()
     {
         
     }
     
+    private func dateHasChanged()
+    {
+        if(defaults.string(forKey: dateKey) == "")
+        {
+            saveDate()
+        }
+        else
+        {
+            let alertControllerOne = UIAlertController(title: "Important", message: "Please note that when you change the start date or end date that all of your data in the cloud and all of your expenses will be deleted.", preferredStyle: .alert)
+            let alertActionOne = UIAlertAction(title: "Okay", style: .destructive) { (alertActionHandler) in
+                self.saveDate()
+            }
+            let alertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+            alertControllerOne.addAction(alertActionOne)
+            alertControllerOne.addAction(alertActionTwo)
+            present(alertControllerOne, animated: true, completion: nil)
+        }
+    }
     
-    // MARK: - IB Actions
-    @IBAction func saveDate(_ sender: UIButton)
+    private func saveDate()
     {
         let date = datePicker.date
+        defaults.setValue(date, forKey: dateKeyAsDate)
         let dateFormatted = date.returnDate()
         print(dateFormatted)
         defaults.setValue(dateFormatted, forKey: dateKey)
+        let alertController = UIAlertController(title: "Saved", message: "The date has been saved!!", preferredStyle: .alert)
+        let alertAction = UIAlertAction(title: "Ok", style: .default) { (alertActionHandler) in
+            DispatchQueue.main.async {
+                self.navigationController?.popViewController(animated: true)
+            }
+        }
+        alertController.addAction(alertAction)
+        present(alertController, animated: true, completion: nil)
+    }
+    
+    // MARK: - IB Actions
+    @IBAction func saveDatePressed(_ sender: UIButton)
+    {
+        dateHasChanged()
     }
     
     
