@@ -46,6 +46,11 @@ class HomeViewController : UIViewController
         runOnViewWillLoad()
     }
     
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        print("Observer is being deallocated.")
+    }
+    
     //MARK: - CloudKit Functions
     private func saveAllRecordsToDataBase()
     {
@@ -159,11 +164,37 @@ class HomeViewController : UIViewController
         tableView.register(UINib(nibName: "mainTableViewCell", bundle: .main), forCellReuseIdentifier: "mainCellToUse")
         loadContext()
         resetAllDictionaries()
+        createPreviousRecordZone()
         initializeAmountSpentDic()
         initializeNumberOfEntriesSpentDict()
         initializeExpenseNameRecordDict()
         print("View Controller is being initialized.")
     }
+    
+    private func createPreviousRecordZone()
+    {
+        if(defaults.bool(forKey: "previousRecordZoneCreated") == false)
+        {
+            let newZone = CKRecordZone(zoneName: ZoneName.oldDataZoneName)
+            privateUserCloudDataBase.save(newZone) { (newZoneHandler, error) in
+                if(error == nil)
+                {
+                    print("Successfully saved the new zone to the user private iCloud database.")
+                    self.defaults.setValue(true, forKey: "previousRecordZoneCreated")
+                }
+                else
+                {
+                    print("There was an error in trying to save the new zone to the users private icloud database.")
+                    print(error)
+                }
+            }
+        }
+        else
+        {
+            print("Old Record Zone already exists.")
+        }
+    }
+    
     
     private func runOnViewWillLoad()
     {
@@ -266,11 +297,16 @@ class HomeViewController : UIViewController
         // So this method is going to act as the safety check to see if we already have records in the cloudkit database. 
         
     }
-    
+        
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if(segue.identifier == "toSettings")
         {
             print("Going to settings")
+            let destinationVC = segue.destination as! SettingsViewController
+            destinationVC.amountSpentDict = amountSpentDict
+            destinationVC.arrayOfExpenseModelObjects = arrayOExpenseModelObjects
+            destinationVC.expenseTypeRecordDict = expenseTypeRecordDict
+            destinationVC.numberOfEntriesDict = numberOfEntriesDict
         }
         if(segue.identifier == "toExpenseTableView")
         {
@@ -287,10 +323,19 @@ class HomeViewController : UIViewController
                 {
                     destinationVC.endDateAsString = safeEndDate
                 }
+                self.createObserver(expenseType: destinationVC.typeOfExpense)
             }
-            // we also need to create the observers for the push notification here. 
+            // we also need to create the observers for the push notification here.
+            
             destinationVC.didPersistedChangeDelegate = self
         }
+    }
+    
+    //MARK: - OBJC Methods
+    @objc private func observerHelper()
+    {
+        print("Running in response to the notification that was posted.")
+        // method does not seem to work if we have parameters 
     }
     
     
@@ -389,6 +434,11 @@ extension HomeViewController : UITableViewDataSource
 //MARK: - Protocol implementaiton
 extension HomeViewController : didPersistedDataChange
 {
+    func createObserver(expenseType observerName: String) {
+        NotificationCenter.default.addObserver(self, selector: #selector(observerHelper), name: NSNotification.Name(observerName), object: nil)
+        print("Running after the add observer method.")
+    }
+    
     func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Float?, newNote: String?, arrayOfExpenseModelObjectsToUse: inout [ExpenseModel]) {
         let expenseObjectToEdit = arrayOfExpenseModelObjectsToUse[indexPath.row]
         
@@ -506,6 +556,7 @@ extension HomeViewController : didPersistedDataChange
      */
     
 }
+
 
 
 
