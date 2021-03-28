@@ -7,7 +7,8 @@
 
 import Foundation
 import UIKit
-import CloudKit
+import CoreData
+
 
 class DatePickerController : UIViewController
 {
@@ -26,7 +27,9 @@ class DatePickerController : UIViewController
         }
     }
     private let defaults = UserDefaults.standard
-    private let userCloudDB = CKContainer(identifier: "iCloud.vinnyMadeApps.What2Budget").privateCloudDatabase
+    
+    // Delegates
+    internal var deletionCommunicatorDelegate : deletionCommunicator?
     
     //IB Outlets
     @IBOutlet weak var datePicker: UIDatePicker!
@@ -35,6 +38,7 @@ class DatePickerController : UIViewController
     override func viewDidLoad() {
         super.viewDidLoad()
         initializeVC()
+        
     }
     
     //MARK: - Functions
@@ -43,23 +47,13 @@ class DatePickerController : UIViewController
     {
         title = dateKey
         initializeDatePicker()
+        
     }
     
     private func initializeDatePicker()
     {
         let dateToDisplay = defaults.value(forKey: dateKeyAsDate) as! Date
         datePicker.date = dateToDisplay
-    }
-    
-    private func deleteObjectsInContext()
-    {
-        // so what we want to do here is delete all of the records in the cloud, delete everything in the context and the two dictionaries
-        
-    }
-    
-    private func deleteRecordsInCloud()
-    {
-        
     }
     
     private func dateHasChanged()
@@ -72,6 +66,7 @@ class DatePickerController : UIViewController
         {
             let alertControllerOne = UIAlertController(title: "Important", message: "Please note that when you change the start date or end date that all of your data in the cloud and all of your expenses will be deleted.", preferredStyle: .alert)
             let alertActionOne = UIAlertAction(title: "Okay", style: .destructive) { (alertActionHandler) in
+                self.deletionCommunicatorDelegate?.deletionHandler()
                 self.saveDate()
             }
             let alertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
@@ -122,4 +117,16 @@ extension Date
         Formatter.date.timeStyle = timeStyle
         return Formatter.date.string(from: self)
     }
+}
+
+//MARK: - Communication Pattern
+protocol deletionCommunicator {
+    
+    func deleteAllDictionaries()
+    func deleteRecordsInCloud()
+    func deleteExpenseModelArray()
+    func deletionHandler() // method to call that will take call the other deletion methods
+    func deleteContext()
+    // testing this
+    func printTesting()
 }

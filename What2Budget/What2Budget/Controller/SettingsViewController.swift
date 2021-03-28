@@ -12,10 +12,19 @@ import UIKit
 
 class SettingsViewController : UIViewController
 {
-    // variables
-    let defaults = UserDefaults.standard
-    internal var tableViewArray : [[String]] = [["Set Start Date","Set End Date", "Set Income"],[ExpenseNames.groceriesExpenseName,ExpenseNames.transportationExpenseName,ExpenseNames.carExpenseName,ExpenseNames.lifeStyleExpenseName,ExpenseNames.shoppingExpenseName,ExpenseNames.subscriptionsExpenseName]]
     
+    // variables passed used for protocol implementation
+    internal var amountSpentDict = [String : Float]()
+    internal var numberOfEntriesDict = [String : Int]()
+    internal var expenseTypeRecordDict = [String : CKRecord]()
+    internal var arrayOfExpenseModelObjects = [ExpenseModel]()
+    
+    
+    // variables
+    internal let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    private let defaults = UserDefaults.standard
+    internal var tableViewArray : [[String]] = [["Set Start Date","Set End Date", "Set Income"],[ExpenseNames.groceriesExpenseName,ExpenseNames.transportationExpenseName,ExpenseNames.carExpenseName,ExpenseNames.lifeStyleExpenseName,ExpenseNames.shoppingExpenseName,ExpenseNames.subscriptionsExpenseName]]
+    internal var privateUserCloudDataBase = CKContainer(identifier: "iCloud.vinnyMadeApps.What2Budget").privateCloudDatabase
     //IB Outlets
     @IBOutlet weak var tableView: UITableView!
     
@@ -37,6 +46,7 @@ class SettingsViewController : UIViewController
                 let backBarButtonItem = UIBarButtonItem(title: "Back", style: .plain, target: nil, action: nil)
                 backBarButtonItem.tintColor = UIColor.black
                 destinationVC.navigationItem.backBarButtonItem = backBarButtonItem
+                destinationVC.deletionCommunicatorDelegate = self
             }
         }
     }
@@ -156,9 +166,70 @@ extension SettingsViewController : UITableViewDataSource
     func numberOfSections(in tableView: UITableView) -> Int {
         return tableViewArray.count
     }
+}
+
+//MARK: - Protocol Implementation
+extension SettingsViewController : deletionCommunicator
+{
+    func deleteContext() {
+        for expenseObj in arrayOfExpenseModelObjects
+        {
+            print(expenseObj)
+            context.delete(expenseObj)
+            do
+            {
+                try context.save()
+            }catch
+            {
+                print("There was an error in deleting the object from the persistent store.")
+                print(error)
+            }
+        }
+    }
+    
+    func printTesting() {
+        print("Running from the print testing method in the SettingsViewController.")
+    }
+    
+    func deletionHandler() {
+        deleteAllDictionaries()
+        print("Deletion Handler method is running.")
+    }
+    
+    func deleteAllDictionaries() {
+        // O(N + M + P) runtime
+        deleteContext()
+        deleteRecordsInCloud()
+        expenseTypeRecordDict.removeAll()
+        
+    }
+    
+    func deleteRecordsInCloud() {
+        for record in expenseTypeRecordDict
+        {
+            let recordID = record.value.recordID
+            privateUserCloudDataBase.delete(withRecordID: recordID) { (recordID, error) in
+                if(error == nil)
+                {
+                    print("Record was deleted successfully.")
+                }
+                else
+                {
+                    print("There was an error in deleting the record.")
+                    print(error)
+                }
+            }
+        }
+    }
+    
+    func deleteExpenseModelArray() {
+        // O(N) runtime
+        arrayOfExpenseModelObjects.removeAll()
+    }
     
     
     
     
 }
+
 
