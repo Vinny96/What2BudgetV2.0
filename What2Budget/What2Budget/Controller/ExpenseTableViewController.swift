@@ -19,7 +19,7 @@ class ExpenseTableViewController : UIViewController
     var typeOfExpense : String = String()
     
     // beta variables
-    
+    var defaults = UserDefaults.standard
     
     
     // IB Outlets
@@ -37,7 +37,7 @@ class ExpenseTableViewController : UIViewController
     }
     
     
-    //MARK: - Functions and IB Actions
+    //MARK: - Functions
     private func initialize()
     {
         title = typeOfExpense
@@ -48,6 +48,39 @@ class ExpenseTableViewController : UIViewController
         startDate.text = startDateAsString
         endDate.text = endDateAsString
         loadContext()
+    }
+    
+    private func notificationPosted()
+    {
+        var totalAmountSpent = Float()
+        let totalAmountAllocated = defaults.float(forKey: typeOfExpense)
+        print(totalAmountAllocated)
+        // so the first step we need to do is calculate the total amount spent for the expenses.
+        for expenseModel in arrayOfExpenses
+        {
+            totalAmountSpent += expenseModel.amountSpent
+        }
+        
+        // now we need to compare the totalAmountSpent with the totalAmountAllocated
+        if(totalAmountSpent >= 0.75*totalAmountAllocated)
+        {
+            postNotification(expenseTypeName: typeOfExpense)
+        }
+        else
+        {
+           print("Notification has not been posted.")
+        }
+        /*
+        So here what we need to do is we need to create a method here that will do the calculations for us. So we will need a method that will retrieve the total amountSpent for that expense category and compare it to the total amount allocated. If this method does meet or exceed 75% of the total amount allocated we will post a notification and use the notification observer communcation pattern. Inside the observer this is where we will run the server code and get the server to send a push notification informing the user that they are about 75% of their allocated amount. So now we need to post the notification in the dataEditedInPersistedStore method. When the user deletes the data we do not want to post any notifications here.
+         */
+    }
+    
+    private func postNotification(expenseTypeName : String)
+    {
+        let name = Notification.Name("\(expenseTypeName)")
+        let notificationToPost = Notification(name: name)
+        print("\(expenseTypeName) notification has been posted.")
+        NotificationCenter.default.post(notificationToPost)
     }
     
     private func createManualEntry()
@@ -71,6 +104,9 @@ class ExpenseTableViewController : UIViewController
                 
                 self.arrayOfExpenses.append(expenseObjToAdd)
                 self.saveContext()
+                // beta code
+                NotificationCenter.default.post(name: NotificationNames.expenseAddedNotificationName, object: self)
+                // end of beta code
                 DispatchQueue.main.async {
                     self.tableView.reloadData()
                     if let safePersistedDidChangeDelegate = self.didPersistedChangeDelegate
@@ -79,6 +115,9 @@ class ExpenseTableViewController : UIViewController
                         safePersistedDidChangeDelegate.addToNumberOfEntriesDict(expenseKey: expenseObjToAdd.typeOfExpense!)
                         // call a method that will update the CKRecord in the cloudKitDataBase and we can pass in the expenseObjToAdd
                         safePersistedDidChangeDelegate.expenseModelObjectAdded(expenseModelObjectAdded: expenseObjToAdd)
+                        // beta code
+                        self.notificationPosted()
+                        // end of beta code
                         print("Delegate methods should be getting called by now.")
                     }
                 }
@@ -214,6 +253,9 @@ class ExpenseTableViewController : UIViewController
                 let newAmountAsFloat = (textField.text! as NSString).floatValue
                 let noteToPass : String? = nil
                 self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
+                // beta code
+                NotificationCenter.default.post(name: NotificationNames.expenseEditedNotificationName, object: self)
+                // end of beta code
                 self.tableView.reloadRows(at: [indexPath], with: .left)
                 print("The index path we are working on is the following : \(indexPath.row)")
             }
@@ -280,10 +322,13 @@ class ExpenseTableViewController : UIViewController
         context.delete(expenseModelObjToDelete)
         arrayOfExpenses.remove(at: indexPath.row)
         saveContext()
-        self.tableView.reloadData()
+        self.tableView.deleteRows(at: [indexPath], with: .left)
     }
     
     
+    
+    
+    // MARK: - IBActions
     @IBAction func addExpense(_ sender: UIBarButtonItem) {
         let alertController = UIAlertController(title: "Add \(typeOfExpense)", message: "Please select the photo option if you want us to auto populate the information for you. Please select the manual entry option if you would like to do this yourself.", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Take Photo", style: .default) { (alertActionOne) in
@@ -342,14 +387,7 @@ extension ExpenseTableViewController : UITableViewDelegate
     func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let contextualAction = UIContextualAction(style: .destructive, title: "Edit") { (contextualActionHandler, viewHandler, completionHandler) in
             DispatchQueue.main.async {
-                let alertController = UIAlertController(title: "Delete Entry", message: "Please confirm if you would like to delete the entry.", preferredStyle: .alert)
-                let alertActionOne = UIAlertAction(title: "Yes", style: .destructive) { (alertActionOneHandler) in
-                    self.deleteExpenseEntry(indexPath: indexPath)
-                }
-                let alertActionTwo = UIAlertAction(title: "No", style: .cancel, handler: nil)
-                alertController.addAction(alertActionOne)
-                alertController.addAction(alertActionTwo)
-                self.present(alertController, animated: true, completion: nil)
+                self.editExpenseEntry(indexPath: indexPath)
             }
         }
         contextualAction.backgroundColor = .systemGreen
@@ -365,7 +403,14 @@ extension ExpenseTableViewController : UITableViewDelegate
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let contextulAction = UIContextualAction(style: .destructive, title: "Delete") { (contextualActionHandler, view, completionHandler) in
             DispatchQueue.main.async {
-                self.deleteExpenseEntry(indexPath: indexPath)
+                let alertController = UIAlertController(title: "Delete Entry", message: "Please confirm if you would like to delete the entry.", preferredStyle: .alert)
+                let alertActionOne = UIAlertAction(title: "Yes", style: .destructive) { (alertActionOneHandler) in
+                    self.deleteExpenseEntry(indexPath: indexPath)
+                }
+                let alertActionTwo = UIAlertAction(title: "No", style: .cancel, handler: nil)
+                alertController.addAction(alertActionOne)
+                alertController.addAction(alertActionTwo)
+                self.present(alertController, animated: true, completion: nil)
             }
         }
         contextulAction.backgroundColor = .systemRed
@@ -406,6 +451,14 @@ extension ExpenseTableViewController : UITableViewDataSource
     }
 }
 
+
+//MARK: - Conforming to Protocols
+
+
+
+
+
+
 //MARK: - Protocols
 protocol didPersistedDataChange {
     
@@ -420,14 +473,17 @@ protocol didPersistedDataChange {
     // so here is where we are going to be adding to the numberOfEntriesDict and we can do this in constant time rather than having to reset everything and run the whole thing again
     
     func dataDeletedInPersistedStore(expenseName : String, amountSpent : Float)
+    // removing the expenseModelObject and updating the CKRecord as a result. 
     
     func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj : ExpenseModel)
+    // so here we are updating the CKRecord
+    
+    func createObserver(expenseType observerName : String)
 }
 
 //MARK: - Notes
 /**
- So here what we need to do is we need to create a method here that will do the calculations for us. So we will need a method that will retrieve the total amountSpent for that expense category
- and compare it to the total amount allocated. If this method does meet or exceed 75% of the total amount allocated we will post a notification and use the notification observer communcation pattern. Inside the observer this is where we will run the server code and get the server to send a push notification informing the user that they are about 75% of their allocated amount. So now we need to post the notification in the dataEditedInPersistedStore method. When the user deletes the data we do not want to post any notifications here. 
+ 
  
  
  */

@@ -39,11 +39,14 @@ class HomeViewController : UIViewController
     override func viewDidLoad() {
         super.viewDidLoad()
         initializeVC()
+        expenseAddedObserver()
+        expenseEditedObserver()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         print("viewWillAppear")
-        runOnViewWillLoad()
+        runOnViewWillAppear()
+        
     }
     
     deinit {
@@ -55,8 +58,9 @@ class HomeViewController : UIViewController
     private func saveAllRecordsToDataBase()
     {
         // so what we want to do here is we want to get the amountSpent and amountAllocated for each expense and that is what we want to send to the cloud. By doing this we can also get push notifications working where if the user's amountSpent is getting a little bit high we can tell them to rein in the spending.
+        let startPeriodAsString = String(defaults.string(forKey: "Set Start Date") ?? "00/00/00")
         let endPeriodAsString = String(defaults.string(forKey: "Set End Date") ?? "00/00/00")
-        if(endPeriodAsString == "00/00/00")
+        if(endPeriodAsString == "00/00/00" || startPeriodAsString == "00/00/00")
         {
             let alertControllerToPresent = UIAlertController(title: "Please set valid date", message: "Please go to settings and set a valid date and fill all of the info before saving to the cloud.", preferredStyle: .alert)
             let alertActionOne = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
@@ -79,13 +83,14 @@ class HomeViewController : UIViewController
             {
                 amountSpent = amountSpentDict[expenseName] ?? 0
                 amountAllocated = defaults.float(forKey: expenseName)
-                //let record = CKRecord(recordType: "Expense")
                 let record = CKRecord(recordType: "Expense")
                 record.setValue(amountSpent, forKey: "amountSpent")
                 record.setValue(amountAllocated, forKey: "amountAllocated")
                 record.setValue(expenseName, forKey: "expenseType")
                 record.setValue(endPeriodAsString, forKey: "endingTimePeriod")
+                record.setValue(startPeriodAsString, forKey: "startingTimePeriod")
                 privateUserCloudDataBase.save(record) { (record, error) in
+                    print("Going into save section in saveAllRecordsToDataBase method.")
                     if(record != nil && error == nil)
                     {
                         print("Saved the record successfully")
@@ -196,7 +201,7 @@ class HomeViewController : UIViewController
     }
     
     
-    private func runOnViewWillLoad()
+    private func runOnViewWillAppear()
     {
         incomeForPeriod.text = String(defaults.float(forKey: "Set Income"))
         startDate.text = defaults.string(forKey: "Set Start Date")
@@ -331,11 +336,40 @@ class HomeViewController : UIViewController
         }
     }
     
+    
+    // MARK: - Creating Observer Methods
+    private func expenseAddedObserver()
+    {
+        NotificationCenter.default.addObserver(self, selector: #selector(expenseAddedObserverHelper), name: NotificationNames.expenseAddedNotificationName, object: nil)
+        print("expenseAddedObserver has been added to the notification center.")
+    }
+    
+    private func expenseEditedObserver()
+    {
+        NotificationCenter.default.addObserver(self, selector: #selector(expenseEditedObserverHelper), name: NotificationNames.expenseEditedNotificationName, object: nil)
+        print("expenseEditedObserver has been added to the notification center.")
+        
+    }
+    
     //MARK: - OBJC Methods
-    @objc private func observerHelper()
+    @objc private func observerHelper() // observer for push notifications
     {
         print("Running in response to the notification that was posted.")
         // method does not seem to work if we have parameters 
+    }
+    
+    @objc private func expenseAddedObserverHelper()
+    {
+        print("Running inside the expenseAddedObserverHelper method")
+        self.tableView.reloadData()
+        // this method can be made more specific so we can reload only the rows that have had expense objects added too.
+    }
+    
+    @objc private func expenseEditedObserverHelper()
+    {
+        print("Running from inside the expenseEditedObserverHelper method")
+        self.tableView.reloadData()
+        // this method can be made more specific so we can reload only the rows that have had expense objects added too.
     }
     
     
@@ -507,7 +541,7 @@ extension HomeViewController : didPersistedDataChange
             print(amountSpentDict)
         }
         // we should also find out which row to specifically reload to be more efficient
-        tableView.reloadData()
+        //tableView.reloadData()
     }
     
     func addToNumberOfEntriesDict(expenseKey : String)
@@ -519,7 +553,7 @@ extension HomeViewController : didPersistedDataChange
             numberOfEntriesDict.updateValue(newValue, forKey: expenseKey)
             print(numberOfEntriesDict)
         }
-        tableView.reloadData()
+        //tableView.reloadData()
     }
     
     
@@ -557,6 +591,7 @@ extension HomeViewController : didPersistedDataChange
     
 }
 
+// MARK: - Protocols
 
 
 
