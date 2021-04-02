@@ -8,6 +8,7 @@
 import Foundation
 import UIKit
 import CoreData
+import CloudKit
 
 
 class DatePickerController : UIViewController
@@ -27,6 +28,9 @@ class DatePickerController : UIViewController
         }
     }
     private let defaults = UserDefaults.standard
+    private let userPrivateCloudDataBase = CKContainer(identifier: "iCloud.vinnyMadeApps.What2Budget").privateCloudDatabase
+    internal var expenseNameRecordDict : [String : CKRecord] = [:]
+    var arrayOfExpenseNames : [String] = [ExpenseNames.groceriesExpenseName,ExpenseNames.transportationExpenseName,ExpenseNames.carExpenseName,ExpenseNames.lifeStyleExpenseName,ExpenseNames.shoppingExpenseName,ExpenseNames.subscriptionsExpenseName]
     
     // Delegates
     internal var deletionCommunicatorDelegate : deletionCommunicator?
@@ -60,12 +64,14 @@ class DatePickerController : UIViewController
     {
         if(defaults.string(forKey: dateKey) == "")
         {
+            // this code runs during initial setup and only runs during initial setup.
             saveDate()
         }
         else
         {
-            let alertControllerOne = UIAlertController(title: "Important", message: "Please note that when you change the start date or end date that all of your data in the cloud and all of your expenses will be deleted.", preferredStyle: .alert)
+            let alertControllerOne = UIAlertController(title: "Important", message: "Please note that when you change the start date or end date that all of your data in the cloud and all of your expenses will be moved.", preferredStyle: .alert)
             let alertActionOne = UIAlertAction(title: "Okay", style: .destructive) { (alertActionHandler) in
+                self.saveRecordsToOldRecordsZoneHandler()
                 self.deletionCommunicatorDelegate?.deletionHandler()
                 self.saveDate()
             }
@@ -75,6 +81,67 @@ class DatePickerController : UIViewController
             present(alertControllerOne, animated: true, completion: nil)
         }
     }
+    
+    private func saveRecordsToOldRecordsZoneHandler()
+    {
+        // so basically here what we need to do is fetch all of the records from the default zone of cloud kit database
+        // then we have to make a copy of each record we fetch. Save that copy to the zone that is going to hold all of the old records.
+        // We then have to delete that record from the default zone and make sure we also empty all the dictionaries in the home view controller as well.
+        if(expenseNameRecordDict.isEmpty == false)
+        {
+            fetchCurrentRecordsAndCreateNewRecords()
+        }
+        /**
+         So what we are doing here is this if statement is whats going to determine whether the fetchCurrentRecords code should run. So when the user changes the start date or the end date and presses save this usually means they are moving onto a new pay period. So what we are doing here is if the dictionary is not empty that means we have to run the code and if it is empty this means the code has already run so there is no need to run it again.
+         */
+    }
+    
+    private func fetchCurrentRecordsAndCreateNewRecords()
+    {
+       for expenseName in expenseNameRecordDict
+       {
+            let recordID = expenseName.value.recordID
+        userPrivateCloudDataBase.fetch(withRecordID: recordID) { (ckRecordRetrieved, error) in
+            if(ckRecordRetrieved != nil && error == nil)
+            {
+                //let newCKRecord = CKRecord(recordType: "Expense")
+                let newCKRecordZoneID = CKRecordZone.ID(zoneName: "Old Records Zone", ownerName: CKCurrentUserDefaultName)
+                let uniqueRecordName = UUID().uuidString
+                let newCKRecordID = CKRecord.ID(recordName: uniqueRecordName, zoneID: newCKRecordZoneID)
+                let newCKRecord = CKRecord(recordType: "Expense", recordID: newCKRecordID)
+                /**
+                 What we are doing above is creating our record and setting the zone of that record to be our Old Records Zone
+                 */
+                
+                
+                let expenseType = ckRecordRetrieved?.value(forKey: "expenseType")
+                let amountAllocated = ckRecordRetrieved?.value(forKey: "amountAllocated")
+                let amountSpent = ckRecordRetrieved?.value(forKey: "amountSpent")
+                let startingTimePeriod = ckRecordRetrieved?.value(forKey: "startingTimePeriod")
+                let endingTimePeriod = ckRecordRetrieved?.value(forKey: "endingTimePeriod")
+                
+                newCKRecord.setValue(expenseType, forKey: "expenseType")
+                newCKRecord.setValue(amountAllocated, forKey: "amountAllocated")
+                newCKRecord.setValue(amountSpent, forKey: "amountSpent")
+                newCKRecord.setValue(startingTimePeriod, forKey: "startingTimePeriod")
+                newCKRecord.setValue(endingTimePeriod, forKey: "endingTimePeriod")
+                
+                self.userPrivateCloudDataBase.save(newCKRecord) { (ckRecord, error) in
+                    if(ckRecord != nil && error == nil)
+                    {
+                        print("Record was saved to the Old Records Zone of the database successfully.")
+                    }
+                    else
+                    {
+                        print("There was an error in saving the record to the old records zone.")
+                    }
+                }
+                
+            }
+        }
+    }
+    expenseNameRecordDict.removeAll()
+  }
     
     private func saveDate()
     {

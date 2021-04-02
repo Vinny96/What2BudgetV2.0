@@ -41,6 +41,7 @@ class HomeViewController : UIViewController
         initializeVC()
         expenseAddedObserver()
         expenseEditedObserver()
+        addRecordsInDefaultZoneDeletedObserver()
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -50,7 +51,8 @@ class HomeViewController : UIViewController
     }
     
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        NotificationCenter.default.removeObserver(self, name: NotificationNames.expenseAddedNotificationName, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NotificationNames.expenseEditedNotificationName, object: nil)
         print("Observer is being deallocated.")
     }
     
@@ -348,7 +350,12 @@ class HomeViewController : UIViewController
     {
         NotificationCenter.default.addObserver(self, selector: #selector(expenseEditedObserverHelper), name: NotificationNames.expenseEditedNotificationName, object: nil)
         print("expenseEditedObserver has been added to the notification center.")
-        
+    }
+    
+    private func addRecordsInDefaultZoneDeletedObserver()
+    {
+        NotificationCenter.default.addObserver(self, selector: #selector(recordsInDefaultZoneDeletedObserverHelper), name: NotificationNames.recordsInDefaultZoneDeleted, object: nil)
+        print("recordsInDefaultZoneDeletedHelper observer has been added to the notification center.")
     }
     
     //MARK: - OBJC Methods
@@ -370,6 +377,14 @@ class HomeViewController : UIViewController
         print("Running from inside the expenseEditedObserverHelper method")
         self.tableView.reloadData()
         // this method can be made more specific so we can reload only the rows that have had expense objects added too.
+    }
+    
+    @objc private func recordsInDefaultZoneDeletedObserverHelper()
+    {
+        print("Running from inside the recordsInDefaultZoneHelper")
+        numberOfEntriesDict.removeAll()
+        amountSpentDict.removeAll()
+        tableView.reloadData()
     }
     
     
