@@ -240,15 +240,17 @@ class HomeViewController : UIViewController
         // this needs to be run on viewDidLoad
         // so easiest way to do this is to run a for loop for each expenseName search the cloudDataBase to see if it exists if not this means the user has not uploaded anything to the cloud yet
         let endingTimePeriodAsString = defaults.string(forKey: "Set End Date")
-        if let safeEndingTimePeriodAsString = endingTimePeriodAsString
+        let startingTimePeriodAsString = defaults.string(forKey: "Set Start Date")
+        if let safeEndingTimePeriodAsString = endingTimePeriodAsString, let safeStartingTimePeriodAsString = startingTimePeriodAsString
         {
             for expenseName in arrayOfExpenseNames
             {
                 // add another predicate that will allow us to filter by date
                 let predicate = NSPredicate(format: "expenseType == %@", expenseName)
                 let predicateTwo = NSPredicate(format: "endingTimePeriod == %@", safeEndingTimePeriodAsString)
+                let predicateThree = NSPredicate(format: "startingTimePeriod == %@", safeStartingTimePeriodAsString)
                // let query = CKQuery(recordType: "Expense", predicate: predicate)
-                let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate,predicateTwo])
+                let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate,predicateTwo, predicateThree])
                 let query = CKQuery(recordType: "Expense", predicate: compoundPredicate)
                 let queryOperation = CKQueryOperation(query: query)
                 queryOperation.recordFetchedBlock = { record in
@@ -289,6 +291,8 @@ class HomeViewController : UIViewController
             let alertControllerAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
             alertControllerToPresent.addAction(alertControllerAction)
             present(alertControllerToPresent, animated: true, completion: nil)
+            print("The expenseTypeRecordDict is printing below.")
+            print(expenseTypeRecordDict)
         }
         else
         {
