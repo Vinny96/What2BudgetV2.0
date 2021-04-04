@@ -8,6 +8,8 @@
 import Foundation
 import UIKit
 import CoreData
+import PhotosUI
+import Vision
 
 class ExpenseTableViewController : UIViewController
 {
@@ -188,12 +190,7 @@ class ExpenseTableViewController : UIViewController
       
         present(alertControllerOne, animated: true, completion: nil)
     }
-    
-    private func useOCR()
-    {
-        // to be implemented
-    }
-    
+        
     private func editExpenseEntry(indexPath : IndexPath)
     {        
         let mainAlertController = UIAlertController(title: "Edit Expense", message: "Please choose one of the options below", preferredStyle: .alert)
@@ -327,11 +324,24 @@ class ExpenseTableViewController : UIViewController
     
     
     
+    // MARK: - Initializing the PHPicker
+    private func initializePHPicker()
+    {
+        var configuration = PHPickerConfiguration() // here we are creating a PHPickerConfiguration
+        // configuration.selectionLimit = 1 we do not need to explicitly define this as the default value is 1
+        configuration.filter = .any(of: [.images]) // here we are setting the filter of the PHPickerConfiguration and the filter is going to filter out only images.
+        let picker = PHPickerViewController(configuration: configuration) // here we are creating a PHPickerViewController and assigning our configuration to it.
+        picker.delegate = self  // setting the delegate of the picker to self as in this file we did implement the delegate methods.
+        present(picker, animated: true, completion: nil) // here we are presenting the picker.
+    }
     
     // MARK: - IBActions
     @IBAction func addExpense(_ sender: UIBarButtonItem) {
         let alertController = UIAlertController(title: "Add \(typeOfExpense)", message: "Please select the photo option if you want us to auto populate the information for you. Please select the manual entry option if you would like to do this yourself.", preferredStyle: .alert)
-        let alertActionOne = UIAlertAction(title: "Take Photo", style: .default) { (alertActionOne) in
+        let alertActionOne = UIAlertAction(title: "Choose Photo", style: .default) { (alertActionOne) in
+            // here is where we need to go to the next viewController
+            //self.performSegue(withIdentifier: "ToPhotoPicker", sender: self)
+            self.initializePHPicker()
             print("The take photo option was pressed.")
         }
         let alertActionTwo = UIAlertAction(title: "Manual Entry", style: .default) { (alertActionTwo) in
@@ -480,6 +490,67 @@ protocol didPersistedDataChange {
     
     func createObserver(expenseType observerName : String)
 }
+
+//MARK: - Extensions
+extension ExpenseTableViewController : PHPickerViewControllerDelegate
+{
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        print("Picker has finished selecting the results.")
+        print(results)
+        dismiss(animated: true, completion: nil)
+        // here is where we want to process the image via OCR
+        implementOCR(arrayOfSelectedAssets: results)
+    }
+    
+    func implementOCR(arrayOfSelectedAssets : [PHPickerResult])
+    {
+        // step 1 we need to convert it to an image
+        let image = arrayOfSelectedAssets[0]
+        image.itemProvider.loadObject(ofClass: UIImage.self) { (object, error) in
+            if let image = object as? UIImage
+            {
+                // here we are getting a cgiImage on which to perform requests
+                let cgImageToUse = image.cgImage
+                if let safeCgImageToUse = cgImageToUse
+                {
+                    self.recognizeText(cgImage: safeCgImageToUse)
+                }
+            }
+        }
+    }
+    
+    func recognizeText(cgImage : CGImage)
+    {
+        //here we are creating a new image-request handler
+        let requestHandler = VNImageRequestHandler(cgImage : cgImage)
+        // here we are creating a new request to recognize text
+        let request = VNRecognizeTextRequest(completionHandler: recognizeTextHelper)
+        do
+        {
+            // perform the text recognition request
+            try requestHandler.perform([request])
+        }catch
+        {
+            print("Unable to perform requests.")
+            print(error.localizedDescription)
+        }
+    }
+    
+    
+    func recognizeTextHelper(request : VNRequest, error : Error?)
+    {
+        guard let observations = request.results as? [VNRecognizedTextObservation] else{
+            return
+        }
+        let recognizedStrings = observations.compactMap{observation in
+            // return the text of the top VNRecognizedText instance.
+            return observation.topCandidates(1).first?.string
+        }
+        print(recognizedStrings)
+        
+    }
+}
+
 
 //MARK: - Notes
 /**
