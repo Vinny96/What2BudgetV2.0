@@ -19,9 +19,11 @@ class ExpenseTableViewController : UIViewController
     var startDateAsString : String = String()
     var endDateAsString : String = String()
     var typeOfExpense : String = String()
+    var defaults = UserDefaults.standard
     
     // beta variables
-    var defaults = UserDefaults.standard
+    var arrayOfStringsFromOCRRequest : [String] = [String]() // the arrays gets populated when OCR has been successful
+    var expenseModelPropDictFromOCR : [String : String] = [:] // this dictionary will be used to hold the elements we have gotten from the array above so we can do instant access rather than having to search for it every time. It will be easier for me to access it from a dictionary as well. 
     
     
     // IB Outlets
@@ -83,6 +85,30 @@ class ExpenseTableViewController : UIViewController
         let notificationToPost = Notification(name: name)
         print("\(expenseTypeName) notification has been posted.")
         NotificationCenter.default.post(notificationToPost)
+    }
+    
+    private func createExpenseObjFromOCR()
+    {
+        let expenseModelObjectToCreate = ExpenseModel(context: context)
+        expenseModelObjectToCreate.typeOfExpense = typeOfExpense
+        expenseModelObjectToCreate.companyName = expenseModelPropDictFromOCR[OCRDictionaryKeys.retailerName]
+        if(expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey] == nil)
+        {
+            expenseModelObjectToCreate.amountSpent = 0
+        }
+        else
+        {
+            expenseModelObjectToCreate.amountSpent = (expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey]! as NSString).floatValue
+            print("Total as NSString is printed below.")
+            print(expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey]! as NSString)
+        }
+        print(expenseModelObjectToCreate)
+        arrayOfExpenses.append(expenseModelObjectToCreate)
+        saveContext()
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+        }
+        
     }
     
     private func createManualEntry()
@@ -339,8 +365,7 @@ class ExpenseTableViewController : UIViewController
     @IBAction func addExpense(_ sender: UIBarButtonItem) {
         let alertController = UIAlertController(title: "Add \(typeOfExpense)", message: "Please select the photo option if you want us to auto populate the information for you. Please select the manual entry option if you would like to do this yourself.", preferredStyle: .alert)
         let alertActionOne = UIAlertAction(title: "Choose Photo", style: .default) { (alertActionOne) in
-            // here is where we need to go to the next viewController
-            //self.performSegue(withIdentifier: "ToPhotoPicker", sender: self)
+            // here is where we are performing the OCR
             self.initializePHPicker()
             print("The take photo option was pressed.")
         }
@@ -365,6 +390,7 @@ class ExpenseTableViewController : UIViewController
         do
         {
             try context.save()
+            print("Saved to the context successfully")
         }
         catch
         {
@@ -502,6 +528,7 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
         implementOCR(arrayOfSelectedAssets: results)
     }
     
+    // MARK: - OCR functions and functions related to OCR
     func implementOCR(arrayOfSelectedAssets : [PHPickerResult])
     {
         // step 1 we need to convert it to an image
@@ -539,6 +566,7 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
     
     func recognizeTextHelper(request : VNRequest, error : Error?)
     {
+        
         guard let observations = request.results as? [VNRecognizedTextObservation] else{
             return
         }
@@ -546,9 +574,54 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
             // return the text of the top VNRecognizedText instance.
             return observation.topCandidates(1).first?.string
         }
-        print(recognizedStrings)
-        
+        arrayOfStringsFromOCRRequest = recognizedStrings
+        print(arrayOfStringsFromOCRRequest)
+        populateOCRDictionary()
+        // trying this out
+        createExpenseObjFromOCR()
     }
+    
+    func getIndexOfStringInOCRArray(stringToLookFor : String) -> Int
+    {
+        if(stringToLookFor == OCRDictionaryKeys.retailerName)
+        {
+            return 0
+        }
+        else
+        {
+            let lastIndex = arrayOfStringsFromOCRRequest.count - 1
+            for index in (0...lastIndex).reversed()
+            {
+                if(arrayOfStringsFromOCRRequest[index] == "TOTAL" || arrayOfStringsFromOCRRequest[index] == "Total" || arrayOfStringsFromOCRRequest[index] == "total")
+                {
+                    return index + 1
+                }
+            }
+        }
+        return -1
+    }
+    
+    
+    func populateOCRDictionary()
+    {
+        // step 1 is we are getting the title of the retailer
+        let indexReturned = getIndexOfStringInOCRArray(stringToLookFor: OCRDictionaryKeys.retailerName)
+        expenseModelPropDictFromOCR.updateValue(arrayOfStringsFromOCRRequest[indexReturned], forKey: OCRDictionaryKeys.retailerName)
+        
+        // step 2 is we are getting the total amount spent
+        let secondIndexReturned = getIndexOfStringInOCRArray(stringToLookFor: OCRDictionaryKeys.totalKey)
+        if(secondIndexReturned != -1)
+        {
+            expenseModelPropDictFromOCR.updateValue(arrayOfStringsFromOCRRequest[secondIndexReturned], forKey: OCRDictionaryKeys.totalKey)
+            print("The price of the product is listed below.")
+            print(arrayOfStringsFromOCRRequest[secondIndexReturned])
+        }
+        // now the dictionary has been populated with all of the necessary information
+        print(expenseModelPropDictFromOCR)
+    }
+    
+    
+    
 }
 
 
