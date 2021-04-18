@@ -56,8 +56,8 @@ class ExpenseTableViewController : UIViewController
     
     private func notificationPosted()
     {
-        var totalAmountSpent = Float()
-        let totalAmountAllocated = defaults.float(forKey: typeOfExpense)
+        var totalAmountSpent = Double()
+        let totalAmountAllocated = defaults.double(forKey: typeOfExpense)
         print(totalAmountAllocated)
         // so the first step we need to do is calculate the total amount spent for the expenses.
         for expenseModel in arrayOfExpenses
@@ -94,13 +94,24 @@ class ExpenseTableViewController : UIViewController
         expenseModelObjectToCreate.companyName = expenseModelPropDictFromOCR[OCRDictionaryKeys.retailerName]
         if(expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey] == nil)
         {
-            expenseModelObjectToCreate.amountSpent = 0
+            let alertControllerToDisplay = UIAlertController(title: "Cannot extract price total from receipt", message: "Please use a different or try manual entry", preferredStyle: .alert)
+            let alertControllerToDisplayAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
+            alertControllerToDisplay.addAction(alertControllerToDisplayAction)
+            DispatchQueue.main.async {
+                self.present(alertControllerToDisplay, animated: true, completion: nil)
+            }
         }
         else
         {
-            expenseModelObjectToCreate.amountSpent = (expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey]! as NSString).floatValue
-            print("Total as NSString is printed below.")
-            print(expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey]! as NSString)
+            let priceAsString = expenseModelPropDictFromOCR[OCRDictionaryKeys.totalKey]
+            print("The totalKey has a value of \(priceAsString)")
+            // beta code
+            
+            // end of beta code
+            let priceAsDouble = (priceAsString as! NSString).doubleValue
+            print("Price as a double is being printed below.")
+            print(priceAsDouble)
+            expenseModelObjectToCreate.amountSpent = priceAsDouble
         }
         print(expenseModelObjectToCreate)
         arrayOfExpenses.append(expenseModelObjectToCreate)
@@ -110,6 +121,8 @@ class ExpenseTableViewController : UIViewController
         }
         
     }
+    
+   
     
     private func createManualEntry()
     {
@@ -171,7 +184,7 @@ class ExpenseTableViewController : UIViewController
         let alertActionThree = UIAlertAction(title: "Save & Continue", style: .default) { (alertActionThreeHandler) in
             if(textFieldTwo.hasText == true)
             {
-                expenseObjToAdd.amountSpent = (textFieldTwo.text! as NSString).floatValue
+                expenseObjToAdd.amountSpent = (textFieldTwo.text! as NSString).doubleValue
                 self.present(alertControllerThree, animated: true, completion: nil)
             }
             else
@@ -273,9 +286,9 @@ class ExpenseTableViewController : UIViewController
         let alertControllerActionOne = UIAlertAction(title: "Save", style: .destructive) { (actionOneHandler) in
             if(textField.hasText == true)
             {
-                let newAmountAsFloat = (textField.text! as NSString).floatValue
+                let newAmountAsDouble = (textField.text! as NSString).doubleValue
                 let noteToPass : String? = nil
-                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsFloat, newNote: noteToPass, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
+                self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmountAsDouble, newNote: noteToPass, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
                 // beta code
                 NotificationCenter.default.post(name: NotificationNames.expenseEditedNotificationName, object: self)
                 // end of beta code
@@ -311,7 +324,7 @@ class ExpenseTableViewController : UIViewController
             if(textField.hasText == true)
             {
                 let newNote = textField.text!
-                let newAmount : Float? = nil
+                let newAmount : Double? = nil
                 self.didPersistedChangeDelegate?.dataEditedInPersistedStore(indexPath: indexPath, newAmount: newAmount, newNote: newNote, arrayOfExpenseModelObjectsToUse: &self.arrayOfExpenses)
                 self.tableView.reloadRows(at: [indexPath], with: .left)
                 print(indexPath.row)
@@ -498,9 +511,9 @@ extension ExpenseTableViewController : UITableViewDataSource
 //MARK: - Protocols
 protocol didPersistedDataChange {
     
-    func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd : Float, expenseName : String)
+    func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd : Double, expenseName : String)
     
-    func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Float?, newNote : String?, arrayOfExpenseModelObjectsToUse : inout [ExpenseModel])
+    func dataEditedInPersistedStore(indexPath : IndexPath, newAmount : Double?, newNote : String?, arrayOfExpenseModelObjectsToUse : inout [ExpenseModel])
     // so this method is for when a data entry has been changed in the persisted store so we only need to update the amountSpentDict as there is no need to udpate the other dictionatires and take up even more time. So what we want called here is when a data entry has been updated we want to not only update the amountSpent dictionaries but also sync it with the cloud as well.
     // will only be called when data in the persistent store is edited.
     // so we can access the specific object we want using the tableView indexPath.row and we can modify it there. Then we need to save this into the context. Rather we need to update the existing one in the context. So to be more specific we are going to find the object in the context and then delete it and the re add it so this is going to have a run time of O(2N).
@@ -508,7 +521,7 @@ protocol didPersistedDataChange {
     func addToNumberOfEntriesDict(expenseKey : String)
     // so here is where we are going to be adding to the numberOfEntriesDict and we can do this in constant time rather than having to reset everything and run the whole thing again
     
-    func dataDeletedInPersistedStore(expenseName : String, amountSpent : Float)
+    func dataDeletedInPersistedStore(expenseName : String, amountSpent : Double)
     // removing the expenseModelObject and updating the CKRecord as a result. 
     
     func expenseModelObjectAdded(expenseModelObjectAdded expenseModelObj : ExpenseModel)
@@ -532,15 +545,18 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
     func implementOCR(arrayOfSelectedAssets : [PHPickerResult])
     {
         // step 1 we need to convert it to an image
-        let image = arrayOfSelectedAssets[0]
-        image.itemProvider.loadObject(ofClass: UIImage.self) { (object, error) in
-            if let image = object as? UIImage
-            {
-                // here we are getting a cgiImage on which to perform requests
-                let cgImageToUse = image.cgImage
-                if let safeCgImageToUse = cgImageToUse
+        if(arrayOfSelectedAssets.count != 0)
+        {
+            let image = arrayOfSelectedAssets[0]
+            image.itemProvider.loadObject(ofClass: UIImage.self) { (object, error) in
+                if let image = object as? UIImage
                 {
-                    self.recognizeText(cgImage: safeCgImageToUse)
+                    // here we are getting a cgiImage on which to perform requests
+                    let cgImageToUse = image.cgImage
+                    if let safeCgImageToUse = cgImageToUse
+                    {
+                        self.recognizeText(cgImage: safeCgImageToUse)
+                    }
                 }
             }
         }
@@ -574,6 +590,7 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
             // return the text of the top VNRecognizedText instance.
             return observation.topCandidates(1).first?.string
         }
+        
         arrayOfStringsFromOCRRequest = recognizedStrings
         print(arrayOfStringsFromOCRRequest)
         populateOCRDictionary()
@@ -592,7 +609,7 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
             let lastIndex = arrayOfStringsFromOCRRequest.count - 1
             for index in (0...lastIndex).reversed()
             {
-                if(arrayOfStringsFromOCRRequest[index] == "TOTAL" || arrayOfStringsFromOCRRequest[index] == "Total" || arrayOfStringsFromOCRRequest[index] == "total")
+                if(arrayOfStringsFromOCRRequest[index] == "TOTAL:" || arrayOfStringsFromOCRRequest[index] == "Total:" || arrayOfStringsFromOCRRequest[index] == "total:" || arrayOfStringsFromOCRRequest[index] == "TOTAL" || arrayOfStringsFromOCRRequest[index] == "Total" || arrayOfStringsFromOCRRequest[index] == "total")
                 {
                     return index + 1
                 }
@@ -618,9 +635,23 @@ extension ExpenseTableViewController : PHPickerViewControllerDelegate
         }
         // now the dictionary has been populated with all of the necessary information
         print(expenseModelPropDictFromOCR)
+        // beta code
+        formatString(priceAsStringToFormat: arrayOfStringsFromOCRRequest[secondIndexReturned])
+        // end of beta code
     }
     
-    
+    func formatString(priceAsStringToFormat stringToPassIn : String)
+    {
+        var priceAsStringFormatted = String()
+        for stringElement in stringToPassIn
+        {
+            if( stringElement != "$" && stringElement != ",")
+            {
+                priceAsStringFormatted.append(stringElement)
+            }
+        }
+        expenseModelPropDictFromOCR.updateValue(priceAsStringFormatted, forKey: OCRDictionaryKeys.totalKey)
+    }
     
 }
 
