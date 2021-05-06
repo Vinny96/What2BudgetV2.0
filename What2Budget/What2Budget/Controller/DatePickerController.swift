@@ -56,8 +56,13 @@ class DatePickerController : UIViewController
     
     private func initializeDatePicker()
     {
-        let dateToDisplay = defaults.value(forKey: dateKeyAsDate) as! Date
-        datePicker.date = dateToDisplay
+        let dateToDisplay = defaults.value(forKey: dateKeyAsDate)
+        if(dateToDisplay == nil)
+        {
+            datePicker.setDate(Date(), animated: true)
+            // this displays the current date as the default date for the datePicker. 
+            
+        }
     }
     
     private func dateHasChanged()

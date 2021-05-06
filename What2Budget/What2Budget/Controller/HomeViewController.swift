@@ -17,7 +17,7 @@ class HomeViewController : UIViewController
     let defaults = UserDefaults.standard
     var arrayOExpenseModelObjects : [ExpenseModel] = []
     
-    var amountSpentDict : [String : Float] = [ExpenseNames.groceriesExpenseName : 0,ExpenseNames.transportationExpenseName : 0,ExpenseNames.carExpenseName: 0,ExpenseNames.lifeStyleExpenseName : 0,ExpenseNames.shoppingExpenseName : 0,ExpenseNames.subscriptionsExpenseName : 0,]
+    var amountSpentDict : [String : Double] = [ExpenseNames.groceriesExpenseName : 0,ExpenseNames.transportationExpenseName : 0,ExpenseNames.carExpenseName: 0,ExpenseNames.lifeStyleExpenseName : 0,ExpenseNames.shoppingExpenseName : 0,ExpenseNames.subscriptionsExpenseName : 0,]
     
     var numberOfEntriesDict : [String : Int] = [ExpenseNames.groceriesExpenseName : 0,ExpenseNames.transportationExpenseName : 0,ExpenseNames.carExpenseName: 0,ExpenseNames.lifeStyleExpenseName : 0,ExpenseNames.shoppingExpenseName : 0,ExpenseNames.subscriptionsExpenseName : 0,]
     
@@ -53,7 +53,7 @@ class HomeViewController : UIViewController
     deinit {
         NotificationCenter.default.removeObserver(self, name: NotificationNames.expenseAddedNotificationName, object: nil)
         NotificationCenter.default.removeObserver(self, name: NotificationNames.expenseEditedNotificationName, object: nil)
-        print("Observer is being deallocated.")
+        print("Observers are being deallocated.")
     }
     
     //MARK: - CloudKit Functions
@@ -77,14 +77,14 @@ class HomeViewController : UIViewController
         }
         else
         {
-            var amountSpent : Float = Float()
-            var amountAllocated : Float = Float()
+            var amountSpent : Double = Double()
+            var amountAllocated : Double = Double()
             var noError : Bool = true
             var isRecordValid : Bool = true
             for expenseName in arrayOfExpenseNames
             {
                 amountSpent = amountSpentDict[expenseName] ?? 0
-                amountAllocated = defaults.float(forKey: expenseName)
+                amountAllocated = defaults.double(forKey: expenseName)
                 let record = CKRecord(recordType: "Expense")
                 record.setValue(amountSpent, forKey: "amountSpent")
                 record.setValue(amountAllocated, forKey: "amountAllocated")
@@ -119,7 +119,7 @@ class HomeViewController : UIViewController
             }
         }
         /**
-         So what we are first checking for here is we are making sure that the user has set a proper date value and the reason for this is we dont want data in the cloud with the default date value as this is going to impact our future queries and functionalties we want to use. So when the use has set a proper date this is where we then run a for loop and create a CKRecord for each expenseName, fill in the appropriate fields and save it to the cloud. 
+         So what we are first checking for here is we are making sure that the user has set a proper date value and the reason for this is we dont want data in the cloud with the default date value as this is going to impact our future queries and functionalties we want to use. So when the user has set a proper date this is where we then run a for loop and create a CKRecord for each expenseName, fill in the appropriate fields and save it to the cloud.
          
          So if our dictionary is empty it means that the user has not synced to the cloud yet.If the dictionary is not empty it means that there are records in the cloud and it has been synced with the cloud as the add, delete and  update methods all update the existing record. 
          
@@ -127,7 +127,7 @@ class HomeViewController : UIViewController
     }
     
     
-    private func updateCKRecord(expenseType : String, amountSpent : Float?)
+    private func updateCKRecord(expenseType : String, amountSpent : Double?)
     {
         // we have to make sure that the  expense name recrod dict is not empty before we proceed
         // so we know that if the expenseNameRecordDict is not empty then our cloudDataBase has data inside.
@@ -192,7 +192,7 @@ class HomeViewController : UIViewController
                 else
                 {
                     print("There was an error in trying to save the new zone to the users private icloud database.")
-                    print(error)
+                    print(error ?? "An error has occured")
                 }
             }
         }
@@ -267,7 +267,9 @@ class HomeViewController : UIViewController
          all of the expenses will be created. So the moment one does not exist we can break out of the loop and this means the user has to create entries first. However if the user
          does have entries then the loop will continue populating our dictionary with the records from the cloud. This method is only run on load.
          
-         This does have a runtime of N*M N being the number of expenseNames in arrayOfExpenseNames and M being the number of elements in the cloud database as it needs to go through M elementa in the worst case. 
+         This does have a runtime of N*M N being the number of expenseNames in arrayOfExpenseNames and M being the number of elements in the cloud database as it needs to go through M elementa in the worst case.
+         
+         The reason why we created this is when it comes to updating our records now that we have a dictionary we can just get the record ID from our dictionry and update the record in the cloud in constant time.
          
          */
     }
@@ -305,7 +307,10 @@ class HomeViewController : UIViewController
             alertControllerToPresent.addAction(alertActionTwo)
             present(alertControllerToPresent, animated: true, completion: nil)
         }
-        // So this method is going to act as the safety check to see if we already have records in the cloudkit database. 
+        // So this method is going to act as the safety check to see if we already have records in the cloudkit database. Now the reason why we have this is to prevent unecessary updates to the cloud server. It is important to remmeber that in the ExpenseTableViewController we are actually updating the record whenever an expense is added or modified. So the user in the situation where the expenseRecordDict already has values in it never has to update the records manutally.
+        
+        
+        // For the next iteration one thing we can do is we can actually create a user default that contains a bool and this bool can be true if recrods exist and if they don't it will be false. The user will then only be able to manually update if the bool is false. This is less code and gets the job done all the same.
         
     }
         
@@ -366,7 +371,6 @@ class HomeViewController : UIViewController
     @objc private func observerHelper() // observer for push notifications
     {
         print("Running in response to the notification that was posted.")
-        // method does not seem to work if we have parameters 
     }
     
     @objc private func expenseAddedObserverHelper()
@@ -492,7 +496,7 @@ extension HomeViewController : didPersistedDataChange
         print("Running after the add observer method.")
     }
     
-    func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Float?, newNote: String?, arrayOfExpenseModelObjectsToUse: inout [ExpenseModel]) {
+    func dataEditedInPersistedStore(indexPath: IndexPath, newAmount: Double?, newNote: String?, arrayOfExpenseModelObjectsToUse: inout [ExpenseModel]) {
         let expenseObjectToEdit = arrayOfExpenseModelObjectsToUse[indexPath.row]
         
         // now we are creating the new expense model object to add
@@ -506,7 +510,7 @@ extension HomeViewController : didPersistedDataChange
         {
             let oldAmount = expenseObjectToEdit.amountSpent
             let expenseTypeTotalAmountSpent = amountSpentDict[expenseObjectToEdit.typeOfExpense!]
-            var differenceToAdd = Float()
+            var differenceToAdd = Double()
             if let safeExpenseTypeTotal = expenseTypeTotalAmountSpent
             {
                 differenceToAdd = safeExpenseTypeTotal - oldAmount
@@ -551,7 +555,7 @@ extension HomeViewController : didPersistedDataChange
          */
     }
     
-    func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd: Float, expenseName: String) {
+    func addToAmountSpentDict(amountFromNewExpenseObject amountToAdd: Double, expenseName: String) {
         let originalAmount = amountSpentDict[expenseName]
         if let safeOriginalAmount = originalAmount
         {
@@ -577,7 +581,7 @@ extension HomeViewController : didPersistedDataChange
     
     
     
-    func dataDeletedInPersistedStore(expenseName: String, amountSpent: Float) {
+    func dataDeletedInPersistedStore(expenseName: String, amountSpent: Double) {
         let originalAmountSpent = amountSpentDict[expenseName]
         let originalNumberOfEntires = numberOfEntriesDict[expenseName]
         if let safeOriginalAmountSpent = originalAmountSpent, let safeOriginalNumberOfEntries = originalNumberOfEntires

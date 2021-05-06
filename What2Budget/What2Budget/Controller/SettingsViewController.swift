@@ -14,7 +14,7 @@ class SettingsViewController : UIViewController
 {
     
     // variables passed used for protocol implementation
-    internal var amountSpentDict = [String : Float]()
+    internal var amountSpentDict = [String : Double]()
     internal var numberOfEntriesDict = [String : Int]()
     internal var expenseTypeRecordDict = [String : CKRecord]()
     internal var arrayOfExpenseModelObjects = [ExpenseModel]()
@@ -47,6 +47,7 @@ class SettingsViewController : UIViewController
                 backBarButtonItem.tintColor = UIColor.black
                 destinationVC.navigationItem.backBarButtonItem = backBarButtonItem
                 destinationVC.deletionCommunicatorDelegate = self
+                destinationVC.expenseNameRecordDict = expenseTypeRecordDict
             }
         }
     }
@@ -83,13 +84,13 @@ class SettingsViewController : UIViewController
                 let alertController = UIAlertController(title: "Set Income", message: "Please enter all anticipated income for the period and do not include the dollar sign.", preferredStyle: .alert)
                 alertController.addTextField { (alertControllerTextField) in
                     textField = alertControllerTextField
-                    textField.placeholder = String(self.defaults.float(forKey: "Set Income"))
+                    textField.placeholder = String(self.defaults.double(forKey: "Set Income"))
                     textField.keyboardType = .decimalPad
                 }
                 let alertControllerActionOne = UIAlertAction(title: "Save Income", style: .default) { (alertControllerActionOne) in
                     let textFieldText = textField.text!
-                    let textFieldAsFloat = (textFieldText as NSString).floatValue
-                    self.defaults.set(textFieldAsFloat, forKey: "Set Income")
+                    let textFieldAsDouble = (textFieldText as NSString).doubleValue
+                    self.defaults.set(textFieldAsDouble, forKey: "Set Income")
                 }
                 let alertControllerActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
                 alertController.addAction(alertControllerActionOne)
@@ -106,13 +107,13 @@ class SettingsViewController : UIViewController
             let alertController = UIAlertController(title: alertTitle, message: alertMessage, preferredStyle: .alert)
             alertController.addTextField { (alertControllerTextField) in
                 textField = alertControllerTextField
-                textField.placeholder = String(self.defaults.float(forKey: self.tableViewArray[indexPath.section][indexPath.row]))
+                textField.placeholder = String(self.defaults.double(forKey: self.tableViewArray[indexPath.section][indexPath.row]))
                 textField.keyboardType = .decimalPad
             }
             let alertActionOne = UIAlertAction(title: "Save Amount", style: .default) { (alertActionOne) in
                 let textFieldText = textField.text!
-                let textFieldTextAsFloat = Float(textFieldText)
-                self.defaults.set(textFieldTextAsFloat, forKey: self.tableViewArray[indexPath.section][indexPath.row])
+                let textFieldTextAsDouble = Double(textFieldText)
+                self.defaults.set(textFieldTextAsDouble, forKey: self.tableViewArray[indexPath.section][indexPath.row])
             }
             let alertActionTwo = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
             alertController.addAction(alertActionOne)
@@ -220,6 +221,9 @@ extension SettingsViewController : deletionCommunicator
                 }
             }
         }
+        // beta code
+        NotificationCenter.default.post(name: NotificationNames.recordsInDefaultZoneDeleted, object: self)
+        // end of beta code
     }
     
     func deleteExpenseModelArray() {
